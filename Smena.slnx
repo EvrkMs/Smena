@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="Domain/Domain.csproj" />
+  </Folder>
+  <Project Path="Smena/Host.csproj" />
+</Solution>
