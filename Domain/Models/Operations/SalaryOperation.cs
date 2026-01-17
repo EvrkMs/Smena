@@ -19,7 +19,8 @@ public class SalaryOperation : OperationBase<SalaryOperationType, int>
         };
     }
 
-    public required Guid EmployeeId {
+    public required Guid EmployeeId
+    {
         get => field;
         set
         {

@@ -1,6 +1,4 @@
-﻿using Domain.Common;
-using Domain.Events.Interface;
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace Domain.Models.Operations.Base;
 
@@ -9,7 +7,8 @@ public abstract class OperationBase<TypeOperation, TAmount>
     where TAmount : INumber<TAmount>
 {
 
-    public required TAmount Amount {
+    public required TAmount Amount
+    {
         get => field;
         set => field = TAmount.Abs(value);
     }
@@ -19,8 +18,4 @@ public abstract class OperationBase<TypeOperation, TAmount>
     public DateTime CreatedDate { get; private set; } = DateTime.UtcNow;
 
     public abstract int SignedAmount();
-
-
-    protected readonly List<IDomainEvent> _events = [];
-    public IReadOnlyCollection<IDomainEvent> Events => _events.AsReadOnly();
 }
