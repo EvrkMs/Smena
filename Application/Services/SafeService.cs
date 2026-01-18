@@ -4,17 +4,12 @@ using Domain.Models.Operations;
 
 namespace Application.Services;
 
-public class SafeService(
+public partial class SafeService(
     ISafeOperationRepository safeOperationRepository,
     IUnitOfWork unitOfWork)
 {
     private readonly ISafeOperationRepository _safeOperationRepository = safeOperationRepository;
     private readonly IUnitOfWork _unitOfWork = unitOfWork;
-
-    public record SafeOperationDto(
-        int Amount,
-        string Comment,
-        SafeOperationType Type);
     public async Task<Result<SafeOperation>> AddOperation(SafeOperationDto dto)
     {
         try

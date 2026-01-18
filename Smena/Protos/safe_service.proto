@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option csharp_namespace = "Grpc.Service.Safe";
+
+package safe;
+
+import "google/protobuf/empty.proto";
+
+service SafeServiceGrpc {
+	rpc AddOperationSafe (SafeOperationAdd) returns (google.protobuf.Empty);
+    rpc GetCurrentSafe (google.protobuf.Empty) returns (CurrentSafe);
+}
+
+message SafeOperationAdd {
+	int32 Amount = 1;
+	string Comment = 2;
+    SafeOperationTypeGrpc Type = 3;
+}
+
+enum SafeOperationTypeGrpc {
+	UNUF = 0;
+    Coming = 1;
+	Exponse = 2;
+}
+
+message CurrentSafe {
+    int32 Current = 1;
+}
