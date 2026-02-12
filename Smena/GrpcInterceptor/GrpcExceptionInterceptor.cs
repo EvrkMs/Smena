@@ -1,4 +1,3 @@
-﻿using Domain.Common;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 
@@ -15,7 +14,7 @@ namespace Host.GrpcInterceptor
             {
                 return await continuation(request, context);
             }
-            catch (DomainException ex)
+            catch (InvalidOperationException ex)
             {
                 throw new RpcException(
                     new Status(StatusCode.FailedPrecondition, ex.Message));
@@ -27,12 +26,10 @@ namespace Host.GrpcInterceptor
             }
             catch (RpcException)
             {
-                // если уже RpcException — не трогаем
                 throw;
             }
             catch (Exception)
             {
-                // логировать обязательно
                 throw new RpcException(
                     new Status(StatusCode.Internal, "Internal server error"));
             }

@@ -15,7 +15,7 @@
 
 # Mono auto generated files
 mono_crash.*
-
+appsettings.Production.json
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -213,6 +213,10 @@ csx/
 # Microsoft Azure Emulator
 ecf/
 rcf/
+
+# appsettings.*.json with secrets (do not commit)
+**/appsettings.Production.json
+**/appsettings.Staging.json
 
 # Windows Store app package directories and files
 AppPackages/

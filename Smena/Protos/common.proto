@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Common";
+
+message BoolResponse {
+  bool success = 1;
+  string message = 2;
+}

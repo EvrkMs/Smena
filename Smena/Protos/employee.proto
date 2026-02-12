@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Employee";
+
+import "google/protobuf/empty.proto";
+import "Protos/common.proto";
+
+message GrpcEmployee {
+  string id = 1;
+  string name = 2;
+  int32 hourly_rate = 3;
+  int64 telegram_id = 4;
+  int32 salary_thread_id = 5;
+}
+
+message GrpcEmployeesResponse {
+  repeated GrpcEmployee employees = 1;
+}
+
+service GrpcEmployeeService {
+  rpc EmployeesList(google.protobuf.Empty) returns (GrpcEmployeesResponse);
+  rpc EmployeeAdd(GrpcEmployee) returns (BoolResponse);
+}

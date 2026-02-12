@@ -1,0 +1,13 @@
+.git
+.github
+
+.vs
+bin
+obj
+**/bin/
+**/obj/
+**/*.user
+**/*.pubxml
+**/*.pubxml.user
+*.userprefs
+4[rdc/ ]

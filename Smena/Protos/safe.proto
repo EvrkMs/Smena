@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Safe";
+
+import "google/protobuf/empty.proto";
+import "Protos/common.proto";
+
+enum SafeOperationTypeGrpc {
+  SAFE_OPERATION_TYPE_UNSPECIFIED = 0;
+  COMING = 1;
+  EXPENSE = 2;
+}
+
+message SafeOperationAdd {
+  int32 amount = 1;
+  string comment = 2;
+  SafeOperationTypeGrpc type = 3;
+}
+
+message CurrentSafeResponse {
+  int64 current = 1;
+}
+
+service GrpcSafeService {
+  rpc CurrentSafe(google.protobuf.Empty) returns (CurrentSafeResponse);
+  rpc SubscribeSafe(google.protobuf.Empty) returns (stream CurrentSafeResponse);
+  rpc AddSafeOperation(SafeOperationAdd) returns (BoolResponse);
+}

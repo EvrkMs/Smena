@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Advance";
+
+import "Protos/common.proto";
+
+service GrpcAdvanceService {
+  rpc SendAdvance(GrpcAdvanceRequest) returns (BoolResponse);
+}
+
+message GrpcAdvanceRequest {
+  string employee_id = 1;
+  int32 amount = 2;
+  bool is_non_cash = 3;
+  bool is_salary = 4;
+  bool extract_from_safe = 5;
+  string comment = 6;
+}

@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.SendPhoto";
+
+service SendPhotoService {
+  rpc RequestPhotos(RequestPhotosRequest) returns (stream PhotoStatusUpdate);
+}
+
+message RequestPhotosRequest {
+  string employee_id = 1;
+}
+
+message PhotoStatusUpdate {
+  oneof status {
+    PhotoStart start = 1;
+    PhotoRequestSent request_sent = 2;
+    PhotosReceived photos_received = 3;
+    PhotosReady photos_ready = 4;
+    PhotosTimeout timeout = 5;
+    Error error = 6;
+  }
+}
+
+message PhotoStart {
+  string message = 1;
+}
+
+message PhotoRequestSent {
+  string message = 1;
+}
+
+message PhotosReceived {
+  int32 received_count = 1;
+}
+
+message PhotosReady {
+  string session_key = 1;
+}
+
+message PhotosTimeout {
+  string message = 1;
+}
+
+message Error {
+  string message = 1;
+}

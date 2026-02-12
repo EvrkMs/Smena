@@ -1,8 +1,3 @@
 <Solution>
-  <Folder Name="/Core/">
-    <Project Path="Application/Application.csproj" Id="6881380a-2f43-4ccc-b5e2-822840d7e757" />
-    <Project Path="Domain/Domain.csproj" />
-  </Folder>
-  <Project Path="Infrastructure/Infrastructure.csproj" Id="338c1680-ac1a-4ff5-b14b-78d1489af227" />
   <Project Path="Smena/Host.csproj" />
 </Solution>

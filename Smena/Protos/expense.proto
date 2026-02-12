@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Expense";
+
+import "Protos/common.proto";
+
+service GrpcExpense {
+  rpc AddExpenseOperation(GrpcExpenseAdd) returns (BoolResponse);
+}
+
+message GrpcExpenseAdd {
+  int32 amount = 1;
+  string comment = 2;
+  bool from_safe = 3;
+  bool is_non_cash = 4;
+  bool send_photo = 5;
+  string photo_session_key = 6;
+  string sender_name = 7;
+}
