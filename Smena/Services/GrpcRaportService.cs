@@ -66,6 +66,15 @@ public class GrpcRaportService(
             return Fail("Сотрудники не найдены.");
         }
 
+        var minusRuleValidation = await ValidateEmployeeMinusRulesAsync(
+            parsedEmployees,
+            employees,
+            context.CancellationToken);
+        if (minusRuleValidation != null)
+        {
+            return minusRuleValidation;
+        }
+
         var scope = _scopeAccessor.Current ?? throw new InvalidOperationException("Telegram scope is not available.");
 
         var runningSafe = currentSafe;
@@ -197,6 +206,35 @@ public class GrpcRaportService(
         }
 
         return employees.ToDictionary(e => e.Id);
+    }
+
+    private async Task<BoolResponse?> ValidateEmployeeMinusRulesAsync(
+        IEnumerable<ParsedEmployee> parsedEmployees,
+        IReadOnlyDictionary<Guid, EmployeeEntity> employees,
+        CancellationToken ct)
+    {
+        foreach (var entry in parsedEmployees)
+        {
+            var currentSalary = await _salaryOperationsService.GetCurrentSalaryAsync(entry.Id, ct);
+            if (currentSalary >= 0)
+            {
+                continue;
+            }
+
+            var employee = employees[entry.Id];
+            var maxMinus = employee.HourlyRate * entry.Raw.Hours;
+
+            if (entry.Raw.Minus <= maxMinus)
+            {
+                continue;
+            }
+
+            return Fail(
+                $"Для сотрудника {employee.Name} при отрицательной ЗП ({currentSalary} руб.) " +
+                $"минус не может превышать {maxMinus} руб.");
+        }
+
+        return null;
     }
 
     private static RaportEntity CreateRaportEntity(GrpcRaportRequest request) =>

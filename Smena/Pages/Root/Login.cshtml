@@ -1,0 +1,38 @@
+@page "/root/login"
+@model Host.Pages.Root.LoginModel
+@{
+    ViewData["Title"] = "Root Login";
+}
+
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Root Login</title>
+    <style>
+        body { font-family: Segoe UI, sans-serif; margin: 0; background: #111; color: #eee; }
+        .wrap { max-width: 420px; margin: 80px auto; padding: 24px; background: #1c1c1c; border-radius: 10px; }
+        input { width: 100%; padding: 10px; margin: 6px 0 12px 0; border: 1px solid #444; border-radius: 6px; background: #0f0f0f; color: #eee; }
+        button { width: 100%; padding: 10px; border: 0; border-radius: 6px; background: #2e7d32; color: #fff; cursor: pointer; }
+        .err { color: #ef5350; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h2>Root Panel Login</h2>
+
+        <div asp-validation-summary="All" class="err"></div>
+
+        <form method="post">
+            <label>Логин</label>
+            <input asp-for="Username" autocomplete="username" />
+
+            <label>Пароль</label>
+            <input asp-for="Password" type="password" autocomplete="current-password" />
+
+            <button type="submit">Войти</button>
+        </form>
+    </div>
+</body>
+</html>

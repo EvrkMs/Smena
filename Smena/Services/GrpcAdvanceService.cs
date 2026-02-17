@@ -42,6 +42,24 @@ public class GrpcAdvanceService(
             return new BoolResponse { Success = false, Message = "Employee not found." };
         }
 
+        var currentSalary = await _salaryOperationsService.GetCurrentSalaryAsync(
+            employeeId,
+            context.CancellationToken);
+
+        if (currentSalary <= 0)
+        {
+            return new BoolResponse { Success = false, Message = "У сотрудника нет доступной ЗП для выплаты." };
+        }
+
+        if (request.Amount > currentSalary)
+        {
+            return new BoolResponse
+            {
+                Success = false,
+                Message = $"Нельзя выдать больше текущей ЗП ({currentSalary} руб.)."
+            };
+        }
+
         var type = request.IsSalary ? SalaryOperationType.Pay : SalaryOperationType.Advance;
         string comment = string.IsNullOrWhiteSpace(request.Comment)
             ? (request.IsSalary ? "ЗП" : "Аванс")

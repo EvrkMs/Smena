@@ -1,0 +1,175 @@
+@page "/root"
+@model Host.Pages.Root.IndexModel
+@{
+    ViewData["Title"] = "Root Panel";
+    var activeTab = string.Equals(Model.Tab, "inventory", StringComparison.OrdinalIgnoreCase) ? "inventory" : "force";
+}
+
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Root Panel</title>
+    <style>
+        body { font-family: Segoe UI, sans-serif; margin: 0; background: #111; color: #eee; }
+        .wrap { max-width: 1100px; margin: 20px auto; padding: 16px; }
+        .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-btn { padding: 10px 14px; border: 0; border-radius: 6px; cursor: pointer; background: #2b2b2b; color: #eee; }
+        .tab-btn.active { background: #1565c0; }
+        .card { background: #1b1b1b; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+        label { display: block; margin: 8px 0 4px 0; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #444; border-radius: 6px; background: #0f0f0f; color: #eee; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .actions { margin-top: 12px; display: flex; gap: 8px; }
+        button { padding: 10px 14px; border: 0; border-radius: 6px; cursor: pointer; }
+        .ok { background: #2e7d32; color: #fff; }
+        .warn { background: #ef6c00; color: #fff; }
+        .ghost { background: #333; color: #fff; }
+        .msg-ok { color: #66bb6a; }
+        .msg-err { color: #ef5350; }
+        .tab { display: none; }
+        .tab.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { border-bottom: 1px solid #333; text-align: left; padding: 8px; }
+        .check-list { max-height: 260px; overflow: auto; border: 1px solid #333; border-radius: 6px; padding: 8px; }
+        .check-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .check-item input { width: auto; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="top">
+        <h2>Root Panel</h2>
+        <form method="post" asp-page-handler="Logout">
+            <button class="ghost" type="submit">Выйти</button>
+        </form>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="msg-ok">@Model.StatusMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="msg-err">@Model.ErrorMessage</div>
+    }
+
+    <div class="tabs">
+        <button class="tab-btn @(activeTab == "force" ? "active" : "")" type="button" onclick="showTab('force')">Форс-выплата</button>
+        <button class="tab-btn @(activeTab == "inventory" ? "active" : "")" type="button" onclick="showTab('inventory')">Инвентаризация</button>
+    </div>
+
+    <div id="tab-force" class="tab @(activeTab == "force" ? "active" : "")">
+        <div class="card">
+            <h3>Форс-выплата (игнор правил)</h3>
+            <form method="post" asp-page-handler="Force">
+                <div class="row">
+                    <div>
+                        <label>Сотрудник</label>
+                        <select name="Force.EmployeeId" required>
+                            <option value="">Выберите</option>
+                            @foreach (var emp in Model.Employees)
+                            {
+                                <option value="@emp.Id">@emp.Name (ЗП: @emp.CurrentSalary)</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label>Сумма</label>
+                        <input name="Force.Amount" type="number" min="1" required />
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div>
+                        <label>Комментарий</label>
+                        <input name="Force.Comment" />
+                    </div>
+                    <div>
+                        <label>Параметры</label>
+                        <div class="check-item"><input name="Force.IsSalary" type="checkbox" value="true" /> <span>Выплата ЗП (иначе аванс)</span></div>
+                        <div class="check-item"><input name="Force.IsNonCash" type="checkbox" value="true" /> <span>Безнал (иначе из сейфа)</span></div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="warn" type="submit">Провести форс-выплату</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="tab-inventory" class="tab @(activeTab == "inventory" ? "active" : "")">
+        <div class="card">
+            <h3>Инвентаризация</h3>
+            <form method="post" asp-page-handler="Inventory">
+                <div class="row">
+                    <div>
+                        <label>Сумма инвентаризации</label>
+                        <input name="Inventory.TotalAmount" type="number" min="1" required />
+                    </div>
+                    <div>
+                        <label>Комментарий</label>
+                        <input name="Inventory.Comment" />
+                    </div>
+                </div>
+
+                <label>Сотрудники</label>
+                <div class="check-list">
+                    @foreach (var emp in Model.Employees)
+                    {
+                        <label class="check-item">
+                            <input type="checkbox" name="Inventory.EmployeeIds" value="@emp.Id" />
+                            <span>@emp.Name (текущая ЗП: @emp.CurrentSalary)</span>
+                        </label>
+                    }
+                </div>
+
+                <div class="actions">
+                    <button class="ok" type="submit">Провести инвентаризацию</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Сотрудники</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Имя</th>
+                    <th>Ставка</th>
+                    <th>Текущая ЗП</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var emp in Model.Employees)
+            {
+                <tr>
+                    <td>@emp.Name</td>
+                    <td>@emp.HourlyRate</td>
+                    <td>@emp.CurrentSalary</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function showTab(tab) {
+        document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        if (tab === 'force') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        }
+        history.replaceState(null, '', '/root?tab=' + tab);
+    }
+</script>
+</body>
+</html>

@@ -17,7 +17,16 @@ message GrpcEmployeesResponse {
   repeated GrpcEmployee employees = 1;
 }
 
+message GrpcEmployeeSalaryRequest {
+  string employee_id = 1;
+}
+
+message GrpcEmployeeSalaryResponse {
+  int64 current_salary = 1;
+}
+
 service GrpcEmployeeService {
   rpc EmployeesList(google.protobuf.Empty) returns (GrpcEmployeesResponse);
   rpc EmployeeAdd(GrpcEmployee) returns (BoolResponse);
+  rpc EmployeeCurrentSalary(GrpcEmployeeSalaryRequest) returns (GrpcEmployeeSalaryResponse);
 }
