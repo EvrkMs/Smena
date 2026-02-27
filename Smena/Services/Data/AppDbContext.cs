@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ExpenseEntity> Expenses => Set<ExpenseEntity>();
     public DbSet<RaportEntity> Raports => Set<RaportEntity>();
     public DbSet<RaportEmployeeEntity> RaportEmployees => Set<RaportEmployeeEntity>();
+    public DbSet<RootPanelUserEntity> RootPanelUsers => Set<RootPanelUserEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +75,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             builder.HasKey(e => e.Id);
             builder.HasIndex(e => e.EmployeeId);
+        });
+
+        modelBuilder.Entity<RootPanelUserEntity>(builder =>
+        {
+            builder.HasKey(u => u.Id);
+            builder.Property(u => u.Username).IsRequired();
+            builder.Property(u => u.PasswordHash).IsRequired();
+            builder.HasIndex(u => u.Username).IsUnique();
+            builder.HasIndex(u => u.CreatedAt);
         });
     }
 }

@@ -217,6 +217,9 @@ rcf/
 # appsettings.*.json with secrets (do not commit)
 **/appsettings.Production.json
 **/appsettings.Staging.json
+.env
+.env.*
+!.env.example
 
 # Windows Store app package directories and files
 AppPackages/

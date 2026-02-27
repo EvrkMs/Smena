@@ -16,6 +16,7 @@ public class GrpcExpenseService(
     PhotoSessionStore photoSessionStore,
     IOptions<PhotoOptions> photoOptions,
     SafeOperationsService safeOperationsService,
+    SafeUpdatesNotifier safeUpdatesNotifier,
     ITelegramScopeAccessor scopeAccessor)
     : Host.Grpc.Services.Expense.GrpcExpense.GrpcExpenseBase
 {
@@ -24,6 +25,7 @@ public class GrpcExpenseService(
     private readonly PhotoSessionStore _photoSessionStore = photoSessionStore;
     private readonly PhotoOptions _photoOptions = photoOptions.Value;
     private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
+    private readonly SafeUpdatesNotifier _safeUpdatesNotifier = safeUpdatesNotifier;
     private readonly ITelegramScopeAccessor _scopeAccessor = scopeAccessor;
 
     public override async Task<BoolResponse> AddExpenseOperation(GrpcExpenseAdd request, ServerCallContext context)
@@ -34,6 +36,7 @@ public class GrpcExpenseService(
         }
 
         var scope = _scopeAccessor.Current ?? throw new InvalidOperationException("Telegram scope is not available.");
+        int? updatedSafe = null;
 
         await TransactionHelper.ExecuteAsync(_db, async () =>
         {
@@ -54,7 +57,7 @@ public class GrpcExpenseService(
 
             if (fromSafe)
             {
-                await _safeOperationsService.ApplySafeOperationAsync(
+                updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
                     -request.Amount,
                     $"Расход: {request.Comment}",
                     scope,
@@ -96,6 +99,11 @@ public class GrpcExpenseService(
 
             await _db.SaveChangesAsync(context.CancellationToken);
         }, context.CancellationToken);
+
+        if (updatedSafe.HasValue)
+        {
+            _safeUpdatesNotifier.Publish(updatedSafe.Value);
+        }
 
         if (!string.IsNullOrWhiteSpace(request.PhotoSessionKey))
         {

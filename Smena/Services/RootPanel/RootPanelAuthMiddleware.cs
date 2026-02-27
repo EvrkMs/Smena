@@ -27,6 +27,13 @@ public sealed class RootPanelAuthMiddleware(
         var accessToken = context.Request.Cookies[AccessCookieName];
         if (_authService.IsAccessTokenValid(accessToken ?? string.Empty))
         {
+            if (_authService.MustChangePassword(accessToken ?? string.Empty) &&
+                !IsChangePasswordEndpoint(context.Request.Path))
+            {
+                context.Response.Redirect("/root/change-password");
+                return;
+            }
+
             await _next(context);
             return;
         }
@@ -76,4 +83,7 @@ public sealed class RootPanelAuthMiddleware(
 
     private static bool IsAnonymousEndpoint(PathString path)
         => path.StartsWithSegments("/root/login", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsChangePasswordEndpoint(PathString path)
+        => path.StartsWithSegments("/root/change-password", StringComparison.OrdinalIgnoreCase);
 }

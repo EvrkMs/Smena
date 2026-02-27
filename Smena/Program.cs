@@ -61,6 +61,23 @@ builder.Services.AddScoped<SafeOperationsService>();
 builder.Services.AddScoped<SalaryOperationsService>();
 
 var app = builder.Build();
+
+// Применяем миграции при старте
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    try
+    {
+        db.Database.Migrate(); // <-- автоматически применяет миграции
+        Console.WriteLine("Database migrated successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Database migration failed: {ex.Message}");
+        throw; // прерываем старт приложения, если БД недоступна
+    }
+}
+
 app.UseMiddleware<RootPanelAuthMiddleware>();
 
 // Configure the HTTP request pipeline.

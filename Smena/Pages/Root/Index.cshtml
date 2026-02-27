@@ -2,11 +2,15 @@
 @model Host.Pages.Root.IndexModel
 @{
     ViewData["Title"] = "Root Panel";
-    var activeTab = string.Equals(Model.Tab, "inventory", StringComparison.OrdinalIgnoreCase) ? "inventory" : "force";
+    var activeTab = string.Equals(Model.Tab, "inventory", StringComparison.OrdinalIgnoreCase)
+        ? "inventory"
+        : string.Equals(Model.Tab, "salary", StringComparison.OrdinalIgnoreCase)
+            ? "salary"
+            : "force";
 }
 
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -22,13 +26,15 @@
         label { display: block; margin: 8px 0 4px 0; }
         input, select { width: 100%; padding: 10px; border: 1px solid #444; border-radius: 6px; background: #0f0f0f; color: #eee; }
         .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
         .actions { margin-top: 12px; display: flex; gap: 8px; }
         button { padding: 10px 14px; border: 0; border-radius: 6px; cursor: pointer; }
         .ok { background: #2e7d32; color: #fff; }
         .warn { background: #ef6c00; color: #fff; }
-        .ghost { background: #333; color: #fff; }
+        .ghost { background: #333; color: #fff; text-decoration: none; display: inline-flex; align-items: center; }
         .msg-ok { color: #66bb6a; }
         .msg-err { color: #ef5350; }
+        .muted { color: #aaa; font-size: 0.95rem; }
         .tab { display: none; }
         .tab.active { display: block; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -43,7 +49,7 @@
     <div class="top">
         <h2>Root Panel</h2>
         <form method="post" asp-page-handler="Logout">
-            <button class="ghost" type="submit">Выйти</button>
+            <button class="ghost" type="submit">Logout</button>
         </form>
     </div>
 
@@ -57,45 +63,46 @@
     }
 
     <div class="tabs">
-        <button class="tab-btn @(activeTab == "force" ? "active" : "")" type="button" onclick="showTab('force')">Форс-выплата</button>
-        <button class="tab-btn @(activeTab == "inventory" ? "active" : "")" type="button" onclick="showTab('inventory')">Инвентаризация</button>
+        <button class="tab-btn @(activeTab == "force" ? "active" : "")" data-tab="force" type="button" onclick="showTab('force')">Force payout</button>
+        <button class="tab-btn @(activeTab == "inventory" ? "active" : "")" data-tab="inventory" type="button" onclick="showTab('inventory')">Inventory</button>
+        <button class="tab-btn @(activeTab == "salary" ? "active" : "")" data-tab="salary" type="button" onclick="showTab('salary')">Salary ops</button>
     </div>
 
     <div id="tab-force" class="tab @(activeTab == "force" ? "active" : "")">
         <div class="card">
-            <h3>Форс-выплата (игнор правил)</h3>
+            <h3>Force payout (ignore normal rules)</h3>
             <form method="post" asp-page-handler="Force">
                 <div class="row">
                     <div>
-                        <label>Сотрудник</label>
+                        <label>Employee</label>
                         <select name="Force.EmployeeId" required>
-                            <option value="">Выберите</option>
+                            <option value="">Select employee</option>
                             @foreach (var emp in Model.Employees)
                             {
-                                <option value="@emp.Id">@emp.Name (ЗП: @emp.CurrentSalary)</option>
+                                <option value="@emp.Id">@emp.Name (Salary: @emp.CurrentSalary)</option>
                             }
                         </select>
                     </div>
                     <div>
-                        <label>Сумма</label>
+                        <label>Amount</label>
                         <input name="Force.Amount" type="number" min="1" required />
                     </div>
                 </div>
 
                 <div class="row">
                     <div>
-                        <label>Комментарий</label>
+                        <label>Comment</label>
                         <input name="Force.Comment" />
                     </div>
                     <div>
-                        <label>Параметры</label>
-                        <div class="check-item"><input name="Force.IsSalary" type="checkbox" value="true" /> <span>Выплата ЗП (иначе аванс)</span></div>
-                        <div class="check-item"><input name="Force.IsNonCash" type="checkbox" value="true" /> <span>Безнал (иначе из сейфа)</span></div>
+                        <label>Options</label>
+                        <div class="check-item"><input name="Force.IsSalary" type="checkbox" value="true" /> <span>Salary payout (otherwise advance)</span></div>
+                        <div class="check-item"><input name="Force.IsNonCash" type="checkbox" value="true" /> <span>Non-cash (otherwise from safe)</span></div>
                     </div>
                 </div>
 
                 <div class="actions">
-                    <button class="warn" type="submit">Провести форс-выплату</button>
+                    <button class="warn" type="submit">Apply force payout</button>
                 </div>
             </form>
         </div>
@@ -103,45 +110,140 @@
 
     <div id="tab-inventory" class="tab @(activeTab == "inventory" ? "active" : "")">
         <div class="card">
-            <h3>Инвентаризация</h3>
+            <h3>Inventory filter</h3>
+            <form method="get">
+                <input type="hidden" name="tab" value="inventory" />
+                <div class="row-3">
+                    <div>
+                        <label>From</label>
+                        <input type="datetime-local" name="InventoryFrom" value="@(Model.InventoryFrom?.ToString("yyyy-MM-ddTHH:mm"))" />
+                    </div>
+                    <div>
+                        <label>To</label>
+                        <input type="datetime-local" name="InventoryTo" value="@(Model.InventoryTo?.ToString("yyyy-MM-ddTHH:mm"))" />
+                    </div>
+                    <div>
+                        <label>Hours (minimum)</label>
+                        <input type="number" min="1" name="InventoryHours" value="@(Model.InventoryHours?.ToString() ?? string.Empty)" />
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="ghost" type="submit">Apply filter</button>
+                    <a class="ghost" href="/root?tab=inventory">Reset</a>
+                </div>
+            </form>
+            <p class="muted">If hours are set, only employees with at least this amount of worked hours in the selected period are shown.</p>
+        </div>
+
+        <div class="card">
+            <h3>Inventory</h3>
             <form method="post" asp-page-handler="Inventory">
+                <input type="hidden" name="InventoryFrom" value="@(Model.InventoryFrom?.ToString("yyyy-MM-ddTHH:mm"))" />
+                <input type="hidden" name="InventoryTo" value="@(Model.InventoryTo?.ToString("yyyy-MM-ddTHH:mm"))" />
+                <input type="hidden" name="InventoryHours" value="@(Model.InventoryHours?.ToString() ?? string.Empty)" />
+
                 <div class="row">
                     <div>
-                        <label>Сумма инвентаризации</label>
+                        <label>Total amount</label>
                         <input name="Inventory.TotalAmount" type="number" min="1" required />
                     </div>
                     <div>
-                        <label>Комментарий</label>
+                        <label>Comment</label>
                         <input name="Inventory.Comment" />
                     </div>
                 </div>
 
-                <label>Сотрудники</label>
+                <label>Employees</label>
                 <div class="check-list">
-                    @foreach (var emp in Model.Employees)
+                    @if (Model.InventoryEmployees.Count == 0)
                     {
-                        <label class="check-item">
-                            <input type="checkbox" name="Inventory.EmployeeIds" value="@emp.Id" />
-                            <span>@emp.Name (текущая ЗП: @emp.CurrentSalary)</span>
-                        </label>
+                        <div class="muted">No employees match the filter.</div>
+                    }
+                    else
+                    {
+                        @foreach (var emp in Model.InventoryEmployees)
+                        {
+                            <label class="check-item">
+                                <input type="checkbox" name="Inventory.EmployeeIds" value="@emp.Id" />
+                                <span>@emp.Name (Current salary: @emp.CurrentSalary, Period hours: @emp.PeriodHours)</span>
+                            </label>
+                        }
                     }
                 </div>
 
                 <div class="actions">
-                    <button class="ok" type="submit">Провести инвентаризацию</button>
+                    <button class="ok" type="submit">Apply inventory</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="tab-salary" class="tab @(activeTab == "salary" ? "active" : "")">
+        <div class="card">
+            <h3>Manual salary operation</h3>
+            <form method="post" asp-page-handler="Salary">
+                <div class="row">
+                    <div>
+                        <label>Employee</label>
+                        <select name="Salary.EmployeeId" required>
+                            <option value="">Select employee</option>
+                            @foreach (var emp in Model.Employees)
+                            {
+                                <option value="@emp.Id">@emp.Name (Current: @emp.CurrentSalary)</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label>Amount</label>
+                        <input name="Salary.Amount" type="number" min="1" required />
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div>
+                        <label>Direction</label>
+                        <select name="Salary.IsIncrease">
+                            <option value="true">Add salary</option>
+                            <option value="false">Subtract salary</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Category</label>
+                        <select name="Salary.Type">
+                            <optgroup label="Add">
+                                <option value="1">Regular</option>
+                                <option value="2">Bonus</option>
+                            </optgroup>
+                            <optgroup label="Subtract">
+                                <option value="3">Advance</option>
+                                <option value="4">Inventory</option>
+                                <option value="5">Fine</option>
+                                <option value="6">Pay</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label>Comment</label>
+                    <input name="Salary.Comment" />
+                </div>
+
+                <div class="actions">
+                    <button class="ok" type="submit">Apply salary operation</button>
                 </div>
             </form>
         </div>
     </div>
 
     <div class="card">
-        <h3>Сотрудники</h3>
+        <h3>Employees</h3>
         <table>
             <thead>
                 <tr>
-                    <th>Имя</th>
-                    <th>Ставка</th>
-                    <th>Текущая ЗП</th>
+                    <th>Name</th>
+                    <th>Hourly rate</th>
+                    <th>Current salary</th>
                 </tr>
             </thead>
             <tbody>
@@ -162,12 +264,16 @@
     function showTab(tab) {
         document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
-        document.getElementById('tab-' + tab).classList.add('active');
-        if (tab === 'force') {
-            document.querySelectorAll('.tab-btn')[0].classList.add('active');
-        } else {
-            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        const tabElement = document.getElementById('tab-' + tab);
+        if (tabElement) {
+            tabElement.classList.add('active');
         }
+
+        const activeButton = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+
         history.replaceState(null, '', '/root?tab=' + tab);
     }
 </script>

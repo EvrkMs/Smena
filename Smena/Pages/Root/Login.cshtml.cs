@@ -20,13 +20,13 @@ public class LoginModel(IRootPanelAuthService authService) : PageModel
 
     public IActionResult OnPost()
     {
-        if (!_authService.TryLogin(Username, Password, out var tokenPair))
+        if (!_authService.TryLogin(Username, Password, out var tokenPair, out var mustChangePassword))
         {
             ModelState.AddModelError(string.Empty, "Неверный логин или пароль.");
             return Page();
         }
 
         RootPanelAuthMiddleware.AppendAuthCookies(Response, tokenPair);
-        return Redirect("/root");
+        return Redirect(mustChangePassword ? "/root/change-password" : "/root");
     }
 }

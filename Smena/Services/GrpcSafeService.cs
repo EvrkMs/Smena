@@ -44,18 +44,23 @@ public class GrpcSafeService(
 
         var scope = _scopeAccessor.Current ?? throw new InvalidOperationException("Telegram scope is not available.");
 
+        int? updatedSafe = null;
         await TransactionHelper.ExecuteAsync(_db, async () =>
         {
             var comment = request.Comment ?? string.Empty;
-            var updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
+            updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
                 signedAmount,
                 comment,
                 scope,
                 context.CancellationToken);
 
             await _db.SaveChangesAsync(context.CancellationToken);
-            _safeUpdatesNotifier.Publish(updatedSafe);
         }, context.CancellationToken);
+
+        if (updatedSafe.HasValue)
+        {
+            _safeUpdatesNotifier.Publish(updatedSafe.Value);
+        }
 
         return new BoolResponse { Success = true, Message = "Safe operation added." };
     }

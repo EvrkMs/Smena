@@ -4,16 +4,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "5001:5001"
-      - "5000:5000"
+    restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
-    # Остальные настройки читаются из appsettings.*.json
+    expose:
+      - "5000"
+      - "5001"
     networks:
-      - nginx_network
+      - smena_edge
+    # Остальные настройки читаются из appsettings.*.json
 
 networks:
-  nginx_network:
+  smena_edge:
+    name: smena_edge
     external: true
-    driver: bridge

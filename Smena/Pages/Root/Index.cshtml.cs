@@ -6,6 +6,7 @@ using Host.Services.Telegram;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace Host.Pages.Root;
 
@@ -15,7 +16,8 @@ public class IndexModel(
     SalaryOperationsService salaryOperationsService,
     SafeOperationsService safeOperationsService,
     SafeUpdatesNotifier safeUpdatesNotifier,
-    IRootPanelAuthService authService) : PageModel
+    IRootPanelAuthService authService,
+    IConfiguration configuration) : PageModel
 {
     private readonly AppDbContext _db = db;
     private readonly TelegramService _telegramService = telegramService;
@@ -23,8 +25,15 @@ public class IndexModel(
     private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
     private readonly SafeUpdatesNotifier _safeUpdatesNotifier = safeUpdatesNotifier;
     private readonly IRootPanelAuthService _authService = authService;
+    private readonly TimeSpan _businessUtcOffset = TimeSpan.FromHours(
+        configuration.GetValue<int?>("RootPanel:TimeZoneOffsetHours") ?? 3);
 
-    public sealed record EmployeeSnapshot(Guid Id, string Name, int HourlyRate, int CurrentSalary);
+    public sealed record EmployeeSnapshot(
+        Guid Id,
+        string Name,
+        int HourlyRate,
+        int CurrentSalary,
+        int PeriodHours);
 
     public sealed class ForcePayoutInput
     {
@@ -42,13 +51,35 @@ public class IndexModel(
         public List<string> EmployeeIds { get; set; } = [];
     }
 
+    public sealed class SalaryAdjustInput
+    {
+        public string EmployeeId { get; set; } = string.Empty;
+        public int Amount { get; set; }
+        public bool IsIncrease { get; set; }
+        public SalaryOperationType Type { get; set; } = SalaryOperationType.Fine;
+        public string Comment { get; set; } = string.Empty;
+    }
+
     [BindProperty]
     public ForcePayoutInput Force { get; set; } = new();
 
     [BindProperty]
     public InventoryInput Inventory { get; set; } = new();
 
+    [BindProperty]
+    public SalaryAdjustInput Salary { get; set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public DateTime? InventoryFrom { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public DateTime? InventoryTo { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public int? InventoryHours { get; set; }
+
     public List<EmployeeSnapshot> Employees { get; private set; } = [];
+    public List<EmployeeSnapshot> InventoryEmployees { get; private set; } = [];
 
     [TempData]
     public string? StatusMessage { get; set; }
@@ -68,13 +99,13 @@ public class IndexModel(
     {
         if (!Guid.TryParse(Force.EmployeeId, out var employeeId))
         {
-            ErrorMessage = "Некорректный сотрудник.";
+            ErrorMessage = "Invalid employee.";
             return Redirect("/root?tab=force");
         }
 
         if (Force.Amount <= 0)
         {
-            ErrorMessage = "Сумма должна быть больше 0.";
+            ErrorMessage = "Amount must be greater than 0.";
             return Redirect("/root?tab=force");
         }
 
@@ -84,7 +115,7 @@ public class IndexModel(
 
         if (employee == null)
         {
-            ErrorMessage = "Сотрудник не найден.";
+            ErrorMessage = "Employee not found.";
             return Redirect("/root?tab=force");
         }
 
@@ -96,7 +127,7 @@ public class IndexModel(
             {
                 var type = Force.IsSalary ? SalaryOperationType.Pay : SalaryOperationType.Advance;
                 var comment = string.IsNullOrWhiteSpace(Force.Comment)
-                    ? (Force.IsSalary ? "ROOT: Выплата ЗП (override)" : "ROOT: Аванс (override)")
+                    ? (Force.IsSalary ? "ROOT: salary payout override" : "ROOT: advance override")
                     : $"ROOT: {Force.Comment}";
 
                 await _salaryOperationsService.ApplySalaryOperationAsync(
@@ -133,7 +164,7 @@ public class IndexModel(
                 _safeUpdatesNotifier.Publish(updatedSafe.Value);
             }
 
-            StatusMessage = "Операция выполнена (без ограничений правил).";
+            StatusMessage = "Force payout operation has been applied.";
         }
         catch (Exception ex)
         {
@@ -154,14 +185,14 @@ public class IndexModel(
 
         if (Inventory.TotalAmount <= 0)
         {
-            ErrorMessage = "Сумма инвентаризации должна быть больше 0.";
-            return Redirect("/root?tab=inventory");
+            ErrorMessage = "Inventory amount must be greater than 0.";
+            return Redirect(BuildInventoryRedirectUrl());
         }
 
         if (ids.Count == 0)
         {
-            ErrorMessage = "Выберите сотрудников.";
-            return Redirect("/root?tab=inventory");
+            ErrorMessage = "Select at least one employee.";
+            return Redirect(BuildInventoryRedirectUrl());
         }
 
         var employees = await _db.Employees
@@ -172,14 +203,14 @@ public class IndexModel(
 
         if (employees.Count == 0)
         {
-            ErrorMessage = "Сотрудники не найдены.";
-            return Redirect("/root?tab=inventory");
+            ErrorMessage = "Employees not found.";
+            return Redirect(BuildInventoryRedirectUrl());
         }
 
         var perEmployee = Inventory.TotalAmount / employees.Count;
         var remainder = Inventory.TotalAmount % employees.Count;
         var comment = string.IsNullOrWhiteSpace(Inventory.Comment)
-            ? "ROOT: Инвентаризация"
+            ? "ROOT: inventory operation"
             : $"ROOT: {Inventory.Comment}";
 
         var scope = _telegramService.CreateScope();
@@ -207,7 +238,7 @@ public class IndexModel(
                 await _db.SaveChangesAsync(ct);
             }, ct);
 
-            StatusMessage = "Инвентаризация проведена.";
+            StatusMessage = "Inventory has been applied.";
         }
         catch (Exception ex)
         {
@@ -215,7 +246,82 @@ public class IndexModel(
             ErrorMessage = ex.Message;
         }
 
-        return Redirect("/root?tab=inventory");
+        return Redirect(BuildInventoryRedirectUrl());
+    }
+
+    public async Task<IActionResult> OnPostSalaryAsync(CancellationToken ct)
+    {
+        if (!Guid.TryParse(Salary.EmployeeId, out var employeeId))
+        {
+            ErrorMessage = "Invalid employee.";
+            return Redirect("/root?tab=salary");
+        }
+
+        if (Salary.Amount <= 0)
+        {
+            ErrorMessage = "Amount must be greater than 0.";
+            return Redirect("/root?tab=salary");
+        }
+
+        if (!Enum.IsDefined(Salary.Type))
+        {
+            ErrorMessage = "Invalid salary operation type.";
+            return Redirect("/root?tab=salary");
+        }
+
+        var isPositiveType = Salary.Type is SalaryOperationType.Regular or SalaryOperationType.Bonus;
+        if (Salary.IsIncrease && !isPositiveType)
+        {
+            ErrorMessage = "Selected type is only for subtraction.";
+            return Redirect("/root?tab=salary");
+        }
+
+        if (!Salary.IsIncrease && isPositiveType)
+        {
+            ErrorMessage = "Selected type is only for addition.";
+            return Redirect("/root?tab=salary");
+        }
+
+        var employee = await _db.Employees
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+
+        if (employee == null)
+        {
+            ErrorMessage = "Employee not found.";
+            return Redirect("/root?tab=salary");
+        }
+
+        var signedAmount = Salary.IsIncrease ? Salary.Amount : -Salary.Amount;
+        var comment = string.IsNullOrWhiteSpace(Salary.Comment)
+            ? $"ROOT: manual salary ({Salary.Type})"
+            : $"ROOT: {Salary.Comment}";
+
+        var scope = _telegramService.CreateScope();
+        try
+        {
+            await TransactionHelper.ExecuteAsync(_db, async () =>
+            {
+                await _salaryOperationsService.ApplySalaryOperationAsync(
+                    employeeId,
+                    signedAmount,
+                    Salary.Type,
+                    comment,
+                    scope,
+                    ct);
+
+                await _db.SaveChangesAsync(ct);
+            }, ct);
+
+            StatusMessage = "Salary operation has been applied.";
+        }
+        catch (Exception ex)
+        {
+            await scope.RollbackAsync(CancellationToken.None);
+            ErrorMessage = ex.Message;
+        }
+
+        return Redirect("/root?tab=salary");
     }
 
     public IActionResult OnPostLogout()
@@ -254,7 +360,161 @@ public class IndexModel(
                 e.Id,
                 e.Name,
                 e.HourlyRate,
-                salaries.GetValueOrDefault(e.Id, 0)))
+                salaries.GetValueOrDefault(e.Id, 0),
+                0))
             .ToList();
+
+        InventoryEmployees = await BuildInventoryEmployeesAsync(Employees, ct);
+    }
+
+    private async Task<List<EmployeeSnapshot>> BuildInventoryEmployeesAsync(
+        IReadOnlyList<EmployeeSnapshot> allEmployees,
+        CancellationToken ct)
+    {
+        if (allEmployees.Count == 0)
+        {
+            return [];
+        }
+
+        var fromLocal = InventoryFrom;
+        var toLocal = InventoryTo;
+
+        // If date-only query values were passed (yyyy-MM-dd), interpret "to" as end-of-day.
+        if (TryGetDateOnlyQueryValue("InventoryFrom", out var fromDateOnly))
+        {
+            fromLocal = fromDateOnly;
+        }
+
+        if (TryGetDateOnlyQueryValue("InventoryTo", out var toDateOnly))
+        {
+            toLocal = toDateOnly.Date.AddDays(1).AddTicks(-1);
+        }
+
+        // If both boundaries are exactly at 00:00 and span multiple days, users usually mean full days.
+        if (fromLocal.HasValue &&
+            toLocal.HasValue &&
+            fromLocal.Value.TimeOfDay == TimeSpan.Zero &&
+            toLocal.Value.TimeOfDay == TimeSpan.Zero &&
+            fromLocal.Value.Date < toLocal.Value.Date)
+        {
+            toLocal = toLocal.Value.Date.AddDays(1).AddTicks(-1);
+        }
+
+        if (fromLocal.HasValue && toLocal.HasValue && fromLocal.Value > toLocal.Value)
+        {
+            ErrorMessage = "Inventory filter date/time range is invalid.";
+            return [];
+        }
+
+        var usePeriodFilter = InventoryFrom.HasValue || InventoryTo.HasValue || (InventoryHours.HasValue && InventoryHours.Value > 0);
+        if (!usePeriodFilter)
+        {
+            return [.. allEmployees];
+        }
+
+        var from = ToUtc(fromLocal);
+        var to = ToUtc(toLocal);
+
+        var hoursByEmployee = await _db.RaportEmployees
+            .AsNoTracking()
+            .Where(x => !from.HasValue || x.Raport.CreatedAt >= from.Value)
+            .Where(x => !to.HasValue || x.Raport.CreatedAt <= to.Value)
+            .GroupBy(x => x.EmployeeId)
+            .Select(g => new
+            {
+                EmployeeId = g.Key,
+                Hours = g.Sum(x => x.Hours)
+            })
+            .ToDictionaryAsync(x => x.EmployeeId, x => x.Hours, ct);
+
+        var filtered = allEmployees
+            .Select(e => e with { PeriodHours = hoursByEmployee.GetValueOrDefault(e.Id, 0) })
+            .ToList();
+
+        if (InventoryHours.HasValue && InventoryHours.Value > 0)
+        {
+            filtered = filtered
+                .Where(x => x.PeriodHours >= InventoryHours.Value)
+                .ToList();
+        }
+
+        return filtered;
+    }
+
+    private string BuildInventoryRedirectUrl()
+    {
+        var query = new List<string> { "tab=inventory" };
+
+        if (InventoryFrom.HasValue)
+        {
+            query.Add($"InventoryFrom={Uri.EscapeDataString(InventoryFrom.Value.ToString("yyyy-MM-ddTHH:mm"))}");
+        }
+
+        if (InventoryTo.HasValue)
+        {
+            query.Add($"InventoryTo={Uri.EscapeDataString(InventoryTo.Value.ToString("yyyy-MM-ddTHH:mm"))}");
+        }
+
+        if (InventoryHours.HasValue && InventoryHours.Value > 0)
+        {
+            query.Add($"InventoryHours={InventoryHours.Value}");
+        }
+
+        return $"/root?{string.Join("&", query)}";
+    }
+
+    private DateTime? ToUtc(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        var dateTime = value.Value;
+        if (dateTime.Kind == DateTimeKind.Utc)
+        {
+            return dateTime;
+        }
+
+        if (dateTime.Kind == DateTimeKind.Local)
+        {
+            return dateTime.ToUniversalTime();
+        }
+
+        if (dateTime.Kind == DateTimeKind.Unspecified)
+        {
+            return new DateTimeOffset(dateTime, _businessUtcOffset).UtcDateTime;
+        }
+
+        return dateTime.ToUniversalTime();
+    }
+
+    private bool TryGetDateOnlyQueryValue(string key, out DateTime value)
+    {
+        value = default;
+
+        if (!Request.Query.TryGetValue(key, out var rawValues))
+        {
+            return false;
+        }
+
+        var raw = rawValues.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(raw) || raw.Contains('T'))
+        {
+            return false;
+        }
+
+        if (!DateTime.TryParseExact(
+                raw,
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var parsed))
+        {
+            return false;
+        }
+
+        value = parsed.Date;
+        return true;
     }
 }

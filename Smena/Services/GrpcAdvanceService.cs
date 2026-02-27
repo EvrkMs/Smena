@@ -13,12 +13,14 @@ public class GrpcAdvanceService(
     AppDbContext db,
     SalaryOperationsService salaryOperationsService,
     SafeOperationsService safeOperationsService,
+    SafeUpdatesNotifier safeUpdatesNotifier,
     ITelegramScopeAccessor scopeAccessor)
     : Host.Grpc.Services.Advance.GrpcAdvanceService.GrpcAdvanceServiceBase
 {
     private readonly AppDbContext _db = db;
     private readonly SalaryOperationsService _salaryOperationsService = salaryOperationsService;
     private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
+    private readonly SafeUpdatesNotifier _safeUpdatesNotifier = safeUpdatesNotifier;
     private readonly ITelegramScopeAccessor _scopeAccessor = scopeAccessor;
 
     public override async Task<BoolResponse> SendAdvance(GrpcAdvanceRequest request, ServerCallContext context)
@@ -68,6 +70,7 @@ public class GrpcAdvanceService(
         bool extractFromSafe = request.ExtractFromSafe && !request.IsNonCash;
 
         var scope = _scopeAccessor.Current ?? throw new InvalidOperationException("Telegram scope is not available.");
+        int? updatedSafe = null;
 
         await TransactionHelper.ExecuteAsync(_db, async () =>
         {
@@ -82,7 +85,7 @@ public class GrpcAdvanceService(
 
             if (extractFromSafe)
             {
-                await _safeOperationsService.ApplySafeOperationAsync(
+                updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
                     -request.Amount,
                     $"{employee.Name}: {comment}",
                     scope,
@@ -100,6 +103,11 @@ public class GrpcAdvanceService(
 
             await _db.SaveChangesAsync(context.CancellationToken);
         }, context.CancellationToken);
+
+        if (updatedSafe.HasValue)
+        {
+            _safeUpdatesNotifier.Publish(updatedSafe.Value);
+        }
 
         return new BoolResponse { Success = true, Message = "Operation completed." };
     }

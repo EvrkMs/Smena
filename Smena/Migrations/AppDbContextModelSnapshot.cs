@@ -178,6 +178,39 @@ namespace Host.Migrations
                     b.ToTable("Raports");
                 });
 
+            modelBuilder.Entity("Host.Services.Data.Entities.RootPanelUserEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("RootPanelUsers");
+                });
+
             modelBuilder.Entity("Host.Services.Data.Entities.SafeOperationEntity", b =>
                 {
                     b.Property<Guid>("Id")
