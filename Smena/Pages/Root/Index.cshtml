@@ -1,7 +1,7 @@
 @page "/root"
 @model Host.Pages.Root.IndexModel
 @{
-    ViewData["Title"] = "Root Panel";
+    ViewData["Title"] = "Панель root";
     var activeTab = string.Equals(Model.Tab, "inventory", StringComparison.OrdinalIgnoreCase)
         ? "inventory"
         : string.Equals(Model.Tab, "salary", StringComparison.OrdinalIgnoreCase)
@@ -10,11 +10,11 @@
 }
 
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Root Panel</title>
+    <title>Панель root</title>
     <style>
         :root {
             color-scheme: dark;
@@ -92,9 +92,9 @@
 <body>
 <div class="wrap">
     <div class="top">
-        <h2>Root Panel</h2>
+        <h2>Панель root</h2>
         <form method="post" asp-page-handler="Logout">
-            <button class="ghost" type="submit">Logout</button>
+            <button class="ghost" type="submit">Выйти</button>
         </form>
     </div>
 
@@ -108,46 +108,46 @@
     }
 
     <div class="tabs">
-        <button class="tab-btn @(activeTab == "force" ? "active" : "")" data-tab="force" type="button" onclick="showTab('force')">Force payout</button>
-        <button class="tab-btn @(activeTab == "inventory" ? "active" : "")" data-tab="inventory" type="button" onclick="showTab('inventory')">Inventory</button>
-        <button class="tab-btn @(activeTab == "salary" ? "active" : "")" data-tab="salary" type="button" onclick="showTab('salary')">Salary ops</button>
+        <button class="tab-btn @(activeTab == "force" ? "active" : "")" data-tab="force" type="button" onclick="showTab('force')">Принудительная выплата</button>
+        <button class="tab-btn @(activeTab == "inventory" ? "active" : "")" data-tab="inventory" type="button" onclick="showTab('inventory')">Инвентаризация</button>
+        <button class="tab-btn @(activeTab == "salary" ? "active" : "")" data-tab="salary" type="button" onclick="showTab('salary')">Операции по зарплате</button>
     </div>
 
     <div id="tab-force" class="tab @(activeTab == "force" ? "active" : "")">
         <div class="card">
-            <h3>Force payout (ignore normal rules)</h3>
+            <h3>Принудительная выплата (в обход обычных правил)</h3>
             <form method="post" asp-page-handler="Force">
                 <div class="row">
                     <div>
-                        <label>Employee</label>
+                        <label>Сотрудник</label>
                         <select name="Force.EmployeeId" required>
-                            <option value="">Select employee</option>
+                            <option value="">Выберите сотрудника</option>
                             @foreach (var emp in Model.Employees)
                             {
-                                <option value="@emp.Id">@emp.Name (Salary: @emp.CurrentSalary)</option>
+                                <option value="@emp.Id">@emp.Name (Зарплата: @emp.CurrentSalary)</option>
                             }
                         </select>
                     </div>
                     <div>
-                        <label>Amount</label>
+                        <label>Сумма</label>
                         <input name="Force.Amount" type="number" min="1" required />
                     </div>
                 </div>
 
                 <div class="row">
                     <div>
-                        <label>Comment</label>
+                        <label>Комментарий</label>
                         <input name="Force.Comment" />
                     </div>
                     <div>
-                        <label>Options</label>
-                        <div class="check-item"><input name="Force.IsSalary" type="checkbox" value="true" /> <span>Salary payout (otherwise advance)</span></div>
-                        <div class="check-item"><input name="Force.IsNonCash" type="checkbox" value="true" /> <span>Non-cash (otherwise from safe)</span></div>
+                        <label>Опции</label>
+                        <div class="check-item"><input name="Force.IsSalary" type="checkbox" value="true" /> <span>Выплата зарплаты (иначе аванс)</span></div>
+                        <div class="check-item"><input name="Force.IsNonCash" type="checkbox" value="true" /> <span>Безналичная (иначе из сейфа)</span></div>
                     </div>
                 </div>
 
                 <div class="actions">
-                    <button class="warn" type="submit">Apply force payout</button>
+                    <button class="warn" type="submit">Применить принудительную выплату</button>
                 </div>
             </form>
         </div>
@@ -155,33 +155,33 @@
 
     <div id="tab-inventory" class="tab @(activeTab == "inventory" ? "active" : "")">
         <div class="card">
-            <h3>Inventory filter</h3>
+            <h3>Фильтр инвентаризации</h3>
             <form method="get">
                 <input type="hidden" name="tab" value="inventory" />
                 <div class="row-3">
                     <div>
-                        <label>From</label>
+                        <label>С</label>
                         <input type="datetime-local" name="InventoryFrom" value="@(Model.InventoryFrom?.ToString("yyyy-MM-ddTHH:mm"))" />
                     </div>
                     <div>
-                        <label>To</label>
+                        <label>По</label>
                         <input type="datetime-local" name="InventoryTo" value="@(Model.InventoryTo?.ToString("yyyy-MM-ddTHH:mm"))" />
                     </div>
                     <div>
-                        <label>Hours (minimum)</label>
+                        <label>Часы (минимум)</label>
                         <input type="number" min="1" name="InventoryHours" value="@(Model.InventoryHours?.ToString() ?? string.Empty)" />
                     </div>
                 </div>
                 <div class="actions">
-                    <button class="ghost" type="submit">Apply filter</button>
-                    <a class="ghost" href="/root?tab=inventory">Reset</a>
+                    <button class="ghost" type="submit">Применить фильтр</button>
+                    <a class="ghost" href="/root?tab=inventory">Сбросить</a>
                 </div>
             </form>
-            <p class="muted">If hours are set, only employees with at least this amount of worked hours in the selected period are shown.</p>
+            <p class="muted">Если указаны часы, будут показаны только сотрудники с не меньшим количеством отработанных часов за выбранный период.</p>
         </div>
 
         <div class="card">
-            <h3>Inventory</h3>
+            <h3>Инвентаризация</h3>
             <form method="post" asp-page-handler="Inventory">
                 <input type="hidden" name="InventoryFrom" value="@(Model.InventoryFrom?.ToString("yyyy-MM-ddTHH:mm"))" />
                 <input type="hidden" name="InventoryTo" value="@(Model.InventoryTo?.ToString("yyyy-MM-ddTHH:mm"))" />
@@ -189,20 +189,20 @@
 
                 <div class="row">
                     <div>
-                        <label>Total amount</label>
+                        <label>Общая сумма</label>
                         <input name="Inventory.TotalAmount" type="number" min="1" required />
                     </div>
                     <div>
-                        <label>Comment</label>
+                        <label>Комментарий</label>
                         <input name="Inventory.Comment" />
                     </div>
                 </div>
 
-                <label>Employees</label>
+                <label>Сотрудники</label>
                 <div class="check-list">
                     @if (Model.InventoryEmployees.Count == 0)
                     {
-                        <div class="muted">No employees match the filter.</div>
+                        <div class="muted">По фильтру нет сотрудников.</div>
                     }
                     else
                     {
@@ -210,14 +210,14 @@
                         {
                             <label class="check-item">
                                 <input type="checkbox" name="Inventory.EmployeeIds" value="@emp.Id" />
-                                <span>@emp.Name (Current salary: @emp.CurrentSalary, Period hours: @emp.PeriodHours)</span>
+                                <span>@emp.Name (Текущая зарплата: @emp.CurrentSalary, Часы за период: @emp.PeriodHours)</span>
                             </label>
                         }
                     }
                 </div>
 
                 <div class="actions">
-                    <button class="ok" type="submit">Apply inventory</button>
+                    <button class="ok" type="submit">Применить инвентаризацию</button>
                 </div>
             </form>
         </div>
@@ -225,71 +225,71 @@
 
     <div id="tab-salary" class="tab @(activeTab == "salary" ? "active" : "")">
         <div class="card">
-            <h3>Manual salary operation</h3>
+            <h3>Ручная операция по зарплате</h3>
             <form method="post" asp-page-handler="Salary">
                 <div class="row">
                     <div>
-                        <label>Employee</label>
+                        <label>Сотрудник</label>
                         <select name="Salary.EmployeeId" required>
-                            <option value="">Select employee</option>
+                            <option value="">Выберите сотрудника</option>
                             @foreach (var emp in Model.Employees)
                             {
-                                <option value="@emp.Id">@emp.Name (Current: @emp.CurrentSalary)</option>
+                                <option value="@emp.Id">@emp.Name (Текущая: @emp.CurrentSalary)</option>
                             }
                         </select>
                     </div>
                     <div>
-                        <label>Amount</label>
+                        <label>Сумма</label>
                         <input name="Salary.Amount" type="number" min="1" required />
                     </div>
                 </div>
 
                 <div class="row">
                     <div>
-                        <label>Direction</label>
+                        <label>Направление</label>
                         <select name="Salary.IsIncrease">
-                            <option value="true">Add salary</option>
-                            <option value="false">Subtract salary</option>
+                            <option value="true">Начислить</option>
+                            <option value="false">Списать</option>
                         </select>
                     </div>
                     <div>
-                        <label>Category</label>
+                        <label>Категория</label>
                         <select name="Salary.Type">
-                            <optgroup label="Add">
-                                <option value="1">Regular</option>
-                                <option value="2">Bonus</option>
+                            <optgroup label="Начисление">
+                                <option value="1">Обычная</option>
+                                <option value="2">Премия</option>
                             </optgroup>
-                            <optgroup label="Subtract">
-                                <option value="3">Advance</option>
-                                <option value="4">Inventory</option>
-                                <option value="5">Fine</option>
-                                <option value="6">Pay</option>
+                            <optgroup label="Списание">
+                                <option value="3">Аванс</option>
+                                <option value="4">Инвентаризация</option>
+                                <option value="5">Штраф</option>
+                                <option value="6">Выплата</option>
                             </optgroup>
                         </select>
                     </div>
                 </div>
 
                 <div>
-                    <label>Comment</label>
+                    <label>Комментарий</label>
                     <input name="Salary.Comment" />
                 </div>
 
                 <div class="actions">
-                    <button class="ok" type="submit">Apply salary operation</button>
+                    <button class="ok" type="submit">Применить операцию</button>
                 </div>
             </form>
         </div>
     </div>
 
     <div class="card">
-        <h3>Employees</h3>
+        <h3>Сотрудники</h3>
         <div class="table-wrap">
             <table>
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Hourly rate</th>
-                        <th>Current salary</th>
+                        <th>Имя</th>
+                        <th>Ставка в час</th>
+                        <th>Текущая зарплата</th>
                     </tr>
                 </thead>
                 <tbody>

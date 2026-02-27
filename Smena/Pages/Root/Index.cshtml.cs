@@ -99,13 +99,13 @@ public class IndexModel(
     {
         if (!Guid.TryParse(Force.EmployeeId, out var employeeId))
         {
-            ErrorMessage = "Invalid employee.";
+            ErrorMessage = "Некорректный сотрудник.";
             return Redirect("/root?tab=force");
         }
 
         if (Force.Amount <= 0)
         {
-            ErrorMessage = "Amount must be greater than 0.";
+            ErrorMessage = "Сумма должна быть больше 0.";
             return Redirect("/root?tab=force");
         }
 
@@ -115,7 +115,7 @@ public class IndexModel(
 
         if (employee == null)
         {
-            ErrorMessage = "Employee not found.";
+            ErrorMessage = "Сотрудник не найден.";
             return Redirect("/root?tab=force");
         }
 
@@ -127,7 +127,7 @@ public class IndexModel(
             {
                 var type = Force.IsSalary ? SalaryOperationType.Pay : SalaryOperationType.Advance;
                 var comment = string.IsNullOrWhiteSpace(Force.Comment)
-                    ? (Force.IsSalary ? "ROOT: salary payout override" : "ROOT: advance override")
+                    ? (Force.IsSalary ? "ROOT: принудительная выплата зарплаты" : "ROOT: принудительный аванс")
                     : $"ROOT: {Force.Comment}";
 
                 await _salaryOperationsService.ApplySalaryOperationAsync(
@@ -164,7 +164,7 @@ public class IndexModel(
                 _safeUpdatesNotifier.Publish(updatedSafe.Value);
             }
 
-            StatusMessage = "Force payout operation has been applied.";
+            StatusMessage = "Принудительная выплата применена.";
         }
         catch (Exception ex)
         {
@@ -185,13 +185,13 @@ public class IndexModel(
 
         if (Inventory.TotalAmount <= 0)
         {
-            ErrorMessage = "Inventory amount must be greater than 0.";
+            ErrorMessage = "Сумма инвентаризации должна быть больше 0.";
             return Redirect(BuildInventoryRedirectUrl());
         }
 
         if (ids.Count == 0)
         {
-            ErrorMessage = "Select at least one employee.";
+            ErrorMessage = "Выберите хотя бы одного сотрудника.";
             return Redirect(BuildInventoryRedirectUrl());
         }
 
@@ -203,14 +203,14 @@ public class IndexModel(
 
         if (employees.Count == 0)
         {
-            ErrorMessage = "Employees not found.";
+            ErrorMessage = "Сотрудники не найдены.";
             return Redirect(BuildInventoryRedirectUrl());
         }
 
         var perEmployee = Inventory.TotalAmount / employees.Count;
         var remainder = Inventory.TotalAmount % employees.Count;
         var comment = string.IsNullOrWhiteSpace(Inventory.Comment)
-            ? "ROOT: inventory operation"
+            ? "ROOT: операция инвентаризации"
             : $"ROOT: {Inventory.Comment}";
 
         var scope = _telegramService.CreateScope();
@@ -238,7 +238,7 @@ public class IndexModel(
                 await _db.SaveChangesAsync(ct);
             }, ct);
 
-            StatusMessage = "Inventory has been applied.";
+            StatusMessage = "Инвентаризация применена.";
         }
         catch (Exception ex)
         {
@@ -253,32 +253,32 @@ public class IndexModel(
     {
         if (!Guid.TryParse(Salary.EmployeeId, out var employeeId))
         {
-            ErrorMessage = "Invalid employee.";
+            ErrorMessage = "Некорректный сотрудник.";
             return Redirect("/root?tab=salary");
         }
 
         if (Salary.Amount <= 0)
         {
-            ErrorMessage = "Amount must be greater than 0.";
+            ErrorMessage = "Сумма должна быть больше 0.";
             return Redirect("/root?tab=salary");
         }
 
         if (!Enum.IsDefined(Salary.Type))
         {
-            ErrorMessage = "Invalid salary operation type.";
+            ErrorMessage = "Некорректный тип операции по зарплате.";
             return Redirect("/root?tab=salary");
         }
 
         var isPositiveType = Salary.Type is SalaryOperationType.Regular or SalaryOperationType.Bonus;
         if (Salary.IsIncrease && !isPositiveType)
         {
-            ErrorMessage = "Selected type is only for subtraction.";
+            ErrorMessage = "Выбранный тип доступен только для списания.";
             return Redirect("/root?tab=salary");
         }
 
         if (!Salary.IsIncrease && isPositiveType)
         {
-            ErrorMessage = "Selected type is only for addition.";
+            ErrorMessage = "Выбранный тип доступен только для начисления.";
             return Redirect("/root?tab=salary");
         }
 
@@ -288,13 +288,13 @@ public class IndexModel(
 
         if (employee == null)
         {
-            ErrorMessage = "Employee not found.";
+            ErrorMessage = "Сотрудник не найден.";
             return Redirect("/root?tab=salary");
         }
 
         var signedAmount = Salary.IsIncrease ? Salary.Amount : -Salary.Amount;
         var comment = string.IsNullOrWhiteSpace(Salary.Comment)
-            ? $"ROOT: manual salary ({Salary.Type})"
+            ? $"ROOT: ручная операция по зарплате ({Salary.Type})"
             : $"ROOT: {Salary.Comment}";
 
         var scope = _telegramService.CreateScope();
@@ -313,7 +313,7 @@ public class IndexModel(
                 await _db.SaveChangesAsync(ct);
             }, ct);
 
-            StatusMessage = "Salary operation has been applied.";
+            StatusMessage = "Операция по зарплате применена.";
         }
         catch (Exception ex)
         {
@@ -402,7 +402,7 @@ public class IndexModel(
 
         if (fromLocal.HasValue && toLocal.HasValue && fromLocal.Value > toLocal.Value)
         {
-            ErrorMessage = "Inventory filter date/time range is invalid.";
+            ErrorMessage = "Некорректный диапазон даты/времени фильтра инвентаризации.";
             return [];
         }
 

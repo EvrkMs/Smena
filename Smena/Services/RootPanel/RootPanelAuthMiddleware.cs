@@ -55,7 +55,7 @@ public sealed class RootPanelAuthMiddleware(
         var accessOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = false,
+            Secure = true,
             SameSite = SameSiteMode.Lax,
             Expires = tokenPair.AccessExpiresAtUtc
         };
@@ -63,7 +63,7 @@ public sealed class RootPanelAuthMiddleware(
         var refreshOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = false,
+            Secure = true,
             SameSite = SameSiteMode.Lax,
             Expires = tokenPair.RefreshExpiresAtUtc
         };
