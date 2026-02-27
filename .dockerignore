@@ -2,6 +2,7 @@
 .github
 
 .vs
+.buildx-cache
 bin
 obj
 **/bin/
