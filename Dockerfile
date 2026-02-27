@@ -3,9 +3,14 @@
 FROM mcr.microsoft.com/dotnet/nightly/sdk:10.0 AS build
 WORKDIR /src
 
+# Copy project file first to maximize restore layer cache reuse.
+COPY Smena/Host.csproj Smena/Host.csproj
+RUN --mount=type=cache,id=smena-nuget,target=/root/.nuget/packages \
+    dotnet restore Smena/Host.csproj
+
 COPY . .
-RUN dotnet restore Smena/Host.csproj
-RUN dotnet publish Smena/Host.csproj -c Release -o /app/publish /p:UseAppHost=false
+RUN --mount=type=cache,id=smena-nuget,target=/root/.nuget/packages \
+    dotnet publish Smena/Host.csproj -c Release -o /app/publish /p:UseAppHost=false --no-restore
 
 FROM mcr.microsoft.com/dotnet/nightly/aspnet:10.0 AS final
 WORKDIR /app

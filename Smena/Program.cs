@@ -68,7 +68,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
-        db.Database.Migrate(); // <-- автоматически применяет миграции
+        await db.Database.MigrateAsync(); // <-- автоматически применяет миграции
         Console.WriteLine("Database migrated successfully.");
     }
     catch (Exception ex)
