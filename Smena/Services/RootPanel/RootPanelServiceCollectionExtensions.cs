@@ -11,8 +11,11 @@ public static class RootPanelServiceCollectionExtensions
     {
         services.Configure<RootPanelAuthOptions>(
             configuration.GetSection(RootPanelAuthOptions.SectionName));
+        services.Configure<RootPanelLoginRateLimitOptions>(
+            configuration.GetSection(RootPanelLoginRateLimitOptions.SectionName));
 
         services.AddSingleton<IPasswordHasher<RootPanelUserEntity>, PasswordHasher<RootPanelUserEntity>>();
+        services.AddSingleton<IRootPanelLoginRateLimiter, InMemoryRootPanelLoginRateLimiter>();
         services.AddSingleton<IRootPanelPasswordService, RootPanelPasswordService>();
         services.AddSingleton<IRootPanelTokenStore, InMemoryRootPanelTokenStore>();
         services.AddSingleton<IRootPanelUserStore, RootPanelUserStore>();

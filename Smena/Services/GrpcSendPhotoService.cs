@@ -1,13 +1,17 @@
 using Grpc.Core;
 using Host.Grpc.Services.SendPhoto;
 using Host.Services.Photo;
+using Microsoft.Extensions.Logging;
 
 namespace Host.Services;
 
-public class GrpcSendPhotoService(TelegramPhotoRequestService photoRequestService)
+public class GrpcSendPhotoService(
+    TelegramPhotoRequestService photoRequestService,
+    ILogger<GrpcSendPhotoService> logger)
     : Host.Grpc.Services.SendPhoto.SendPhotoService.SendPhotoServiceBase
 {
     private readonly TelegramPhotoRequestService _photoRequestService = photoRequestService;
+    private readonly ILogger<GrpcSendPhotoService> _logger = logger;
 
     public override async Task RequestPhotos(
         RequestPhotosRequest request,
@@ -76,9 +80,15 @@ public class GrpcSendPhotoService(TelegramPhotoRequestService photoRequestServic
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "RequestPhotos failed for employeeId={EmployeeId}", request.EmployeeId);
+
+            var detail = ex.InnerException == null
+                ? ex.Message
+                : $"{ex.Message} | Inner: {ex.InnerException.Message}";
+
             await responseStream.WriteAsync(new PhotoStatusUpdate
             {
-                Error = new Error { Message = ex.Message }
+                Error = new Error { Message = detail }
             });
         }
     }
