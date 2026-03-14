@@ -40,12 +40,12 @@ public class TelegramPhotoRequestService(
             await progress("Start");
         }
 
-        var client = _telegramService.GetClientOrThrow();
-
-        await client.SendMessage(
-            employee.TelegramAccount.TelegramId,
-            "Ожидаю фото...",
-            cancellationToken: ct);
+        await _telegramService.ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMessage(
+                employee.TelegramAccount.TelegramId,
+                "Ожидаю фото...",
+                cancellationToken: token),
+            ct);
 
         if (progress != null)
         {
@@ -63,10 +63,12 @@ public class TelegramPhotoRequestService(
         {
             ct.ThrowIfCancellationRequested();
 
-            var updates = await client.GetUpdates(
-                offset: _offsetStore.GetOffset(),
-                timeout: 1,
-                cancellationToken: ct);
+            var updates = await _telegramService.ExecuteWithRetryAsync(
+                (bot, token) => bot.GetUpdates(
+                    offset: _offsetStore.GetOffset(),
+                    timeout: 1,
+                    cancellationToken: token),
+                ct);
 
             if (updates.Length > 0)
             {

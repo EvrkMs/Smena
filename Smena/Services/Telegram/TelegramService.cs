@@ -1,8 +1,11 @@
-﻿using Host.Services.Data;
+using Host.Services.Data;
 using Host.Services.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Net.Http;
+using System.Net.Sockets;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 
 namespace Host.Services.Telegram;
@@ -10,11 +13,15 @@ namespace Host.Services.Telegram;
 public class TelegramService(
     IOptions<TelegramOptions> options,
     AppDbContext db,
-    ILogger<TelegramMessageScope> scopeLogger)
+    ILogger<TelegramMessageScope> scopeLogger,
+    ILogger<TelegramService> logger)
 {
+    private const int RetryAttempts = 4;
+
     private readonly TelegramOptions _options = options.Value;
     private readonly AppDbContext _db = db;
     private readonly ILogger<TelegramMessageScope> _scopeLogger = scopeLogger;
+    private readonly ILogger<TelegramService> _logger = logger;
     private ITelegramBotClient? _botClient;
 
     public TelegramMessageScope CreateScope() => new(GetClientOrThrow(), _scopeLogger);
@@ -30,18 +37,19 @@ public class TelegramService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        var client = GetClientOrThrow();
         string senderPart = string.IsNullOrWhiteSpace(expense.SenderName)
             ? string.Empty
             : $" ({expense.SenderName})";
 
         string msg = $"{DateTime.Now:yyyy.MM.dd HH:mm}\n{expense.Amount} {expense.Comment}{senderPart}";
 
-        var message = await client.SendMessage(
-            _options.ForwardChatId,
-            msg,
-            messageThreadId: _options.ExpensesThreadId,
-            cancellationToken: ct);
+        var message = await ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMessage(
+                _options.ForwardChatId,
+                msg,
+                messageThreadId: _options.ExpensesThreadId,
+                cancellationToken: token),
+            ct);
 
         scope.Track(message.Chat.Id, message.MessageId);
     }
@@ -51,7 +59,6 @@ public class TelegramService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        var client = GetClientOrThrow();
         if (fileIds.Count == 0)
         {
             return;
@@ -62,11 +69,13 @@ public class TelegramService(
             .Cast<IAlbumInputMedia>()
             .ToList();
 
-        var messages = await client.SendMediaGroup(
-            _options.ForwardChatId,
-            media,
-            messageThreadId: _options.ExpensesThreadId,
-            cancellationToken: ct);
+        var messages = await ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMediaGroup(
+                _options.ForwardChatId,
+                media,
+                messageThreadId: _options.ExpensesThreadId,
+                cancellationToken: token),
+            ct);
 
         foreach (var message in messages)
         {
@@ -81,16 +90,17 @@ public class TelegramService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        var client = GetClientOrThrow();
         string sign = amount >= 0 ? "+" : string.Empty;
         string msg = $"{DateTime.Now:yyyy.MM.dd HH:mm}\n{sign}{amount} {comment}\nТеперь сейф: {currentSafe}";
         int? threadId = _options.SafeThreadId > 0 ? _options.SafeThreadId : null;
 
-        var message = await client.SendMessage(
-            _options.ForwardChatId,
-            msg,
-            messageThreadId: threadId,
-            cancellationToken: ct);
+        var message = await ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMessage(
+                _options.ForwardChatId,
+                msg,
+                messageThreadId: threadId,
+                cancellationToken: token),
+            ct);
 
         scope.Track(message.Chat.Id, message.MessageId);
     }
@@ -104,7 +114,6 @@ public class TelegramService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        var client = GetClientOrThrow();
         var employee = await _db.Employees
             .AsNoTracking()
             .FirstOrDefaultAsync(e => e.Id == employeeId, ct)
@@ -126,11 +135,13 @@ public class TelegramService(
         string msg = $"{DateTime.Now:yyyy.MM.dd HH:mm}\n{sign}{amount} {employee.Name} {entryLabel}\nТеперь: {currentSalary}";
 
         int? threadId = employee.SalaryThreadId > 0 ? employee.SalaryThreadId : null;
-        var message = await client.SendMessage(
-            _options.SalaryChatId,
-            msg,
-            messageThreadId: threadId,
-            cancellationToken: ct);
+        var message = await ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMessage(
+                _options.SalaryChatId,
+                msg,
+                messageThreadId: threadId,
+                cancellationToken: token),
+            ct);
 
         scope.Track(message.Chat.Id, message.MessageId);
     }
@@ -147,7 +158,6 @@ public class TelegramService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        var client = GetClientOrThrow();
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(raport.CreatedAt.ToString("dd.MM.yyyy HH:mm"));
         sb.AppendLine();
@@ -188,11 +198,13 @@ public class TelegramService(
             sb.AppendLine($"Всего ЗП: {totalSalary} руб.");
         }
 
-        var message = await client.SendMessage(
-            _options.ForwardChatId,
-            sb.ToString(),
-            messageThreadId: _options.RaportThreadId,
-            cancellationToken: ct);
+        var message = await ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMessage(
+                _options.ForwardChatId,
+                sb.ToString(),
+                messageThreadId: _options.RaportThreadId,
+                cancellationToken: token),
+            ct);
 
         scope.Track(message.Chat.Id, message.MessageId);
     }
@@ -202,7 +214,6 @@ public class TelegramService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        var client = GetClientOrThrow();
         if (fileIds.Count == 0)
         {
             return;
@@ -213,11 +224,13 @@ public class TelegramService(
             .Cast<IAlbumInputMedia>()
             .ToList();
 
-        var messages = await client.SendMediaGroup(
-            _options.ForwardChatId,
-            media,
-            messageThreadId: _options.RaportThreadId,
-            cancellationToken: ct);
+        var messages = await ExecuteWithRetryAsync(
+            (bot, token) => bot.SendMediaGroup(
+                _options.ForwardChatId,
+                media,
+                messageThreadId: _options.RaportThreadId,
+                cancellationToken: token),
+            ct);
 
         foreach (var message in messages)
         {
@@ -240,5 +253,78 @@ public class TelegramService(
         _botClient = new TelegramBotClient(_options.Token);
         return _botClient;
     }
-}
 
+    public Task<T> ExecuteWithRetryAsync<T>(
+        Func<ITelegramBotClient, CancellationToken, Task<T>> action,
+        CancellationToken ct)
+    {
+        return ExecuteWithRetryCoreAsync(action, ct);
+    }
+
+    private async Task<T> ExecuteWithRetryCoreAsync<T>(
+        Func<ITelegramBotClient, CancellationToken, Task<T>> action,
+        CancellationToken ct)
+    {
+        var client = GetClientOrThrow();
+        Exception? lastError = null;
+
+        for (var attempt = 1; attempt <= RetryAttempts; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                return await action(client, ct);
+            }
+            catch (Exception ex) when (IsTransient(ex) && attempt < RetryAttempts)
+            {
+                lastError = ex;
+                var delay = TimeSpan.FromMilliseconds(250 * Math.Pow(2, attempt - 1));
+                _logger.LogWarning(
+                    ex,
+                    "Transient Telegram error on attempt {Attempt}/{MaxAttempts}. Retrying after {DelayMs} ms.",
+                    attempt,
+                    RetryAttempts,
+                    delay.TotalMilliseconds);
+                await Task.Delay(delay, ct);
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                break;
+            }
+        }
+
+        throw lastError ?? new InvalidOperationException("Telegram operation failed without an exception.");
+    }
+
+    private static bool IsTransient(Exception ex)
+    {
+        if (ex is RequestException requestEx)
+        {
+            return requestEx.InnerException == null || IsTransient(requestEx.InnerException);
+        }
+
+        if (ex is HttpRequestException httpEx)
+        {
+            return httpEx.InnerException == null || IsTransient(httpEx.InnerException);
+        }
+
+        if (ex is SocketException socketEx)
+        {
+            return socketEx.SocketErrorCode is SocketError.TryAgain
+                or SocketError.NetworkUnreachable
+                or SocketError.TimedOut
+                or SocketError.HostUnreachable
+                or SocketError.ConnectionReset
+                or SocketError.ConnectionAborted;
+        }
+
+        if (ex is TaskCanceledException or TimeoutException)
+        {
+            return true;
+        }
+
+        return false;
+    }
+}
