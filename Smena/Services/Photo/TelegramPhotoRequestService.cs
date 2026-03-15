@@ -13,22 +13,29 @@ public class TelegramPhotoRequestService(
     AppDbContext db,
     PhotoSessionStore sessionStore,
     TelegramUpdateOffsetStore offsetStore,
-    IOptions<PhotoOptions> options)
+    IOptions<PhotoOptions> options,
+    ILogger<TelegramPhotoRequestService> logger)
 {
     private readonly TelegramService _telegramService = telegramService;
     private readonly AppDbContext _db = db;
     private readonly PhotoSessionStore _sessionStore = sessionStore;
     private readonly TelegramUpdateOffsetStore _offsetStore = offsetStore;
     private readonly PhotoOptions _options = options.Value;
+    private readonly ILogger<TelegramPhotoRequestService> _logger = logger;
 
     public async Task<(bool Success, string Message, string? SessionKey)> RequestPhotosAsync(
         Guid employeeId,
         Func<string, Task>? progress,
         CancellationToken ct)
     {
+        var timeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds);
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+        var operationCt = linkedCts.Token;
+
         var employee = await _db.Employees
             .Include(e => e.TelegramAccount)
-            .FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+            .FirstOrDefaultAsync(e => e.Id == employeeId, operationCt);
 
         if (employee?.TelegramAccount == null)
         {
@@ -40,12 +47,28 @@ public class TelegramPhotoRequestService(
             await progress("Start");
         }
 
-        await _telegramService.ExecuteWithRetryAsync(
-            (bot, token) => bot.SendMessage(
-                employee.TelegramAccount.TelegramId,
-                "Ожидаю фото...",
-                cancellationToken: token),
-            ct);
+        try
+        {
+            await _telegramService.ExecuteWithRetryAsync(
+                (bot, token) => bot.SendMessage(
+                    employee.TelegramAccount.TelegramId,
+                    "Ожидаю фото...",
+                    cancellationToken: token),
+                operationCt);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return (false, "Не удалось отправить сообщение в Telegram: timeout.", null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to send photo request message to Telegram for employeeId={EmployeeId} telegramId={TelegramId}",
+                employee.Id,
+                employee.TelegramAccount.TelegramId);
+            return (false, $"Не удалось отправить сообщение в Telegram: {ex.Message}", null);
+        }
 
         if (progress != null)
         {
@@ -53,7 +76,6 @@ public class TelegramPhotoRequestService(
         }
 
         var requestTime = DateTime.UtcNow;
-        var timeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds);
         var albumWindow = TimeSpan.FromSeconds(2);
         var fileIds = new List<string>();
         string? mediaGroupId = null;
@@ -61,14 +83,14 @@ public class TelegramPhotoRequestService(
 
         while (DateTime.UtcNow - requestTime < timeout)
         {
-            ct.ThrowIfCancellationRequested();
+            operationCt.ThrowIfCancellationRequested();
 
             var updates = await _telegramService.ExecuteWithRetryAsync(
                 (bot, token) => bot.GetUpdates(
                     offset: _offsetStore.GetOffset(),
                     timeout: 1,
                     cancellationToken: token),
-                ct);
+                operationCt);
 
             if (updates.Length > 0)
             {

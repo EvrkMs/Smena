@@ -18,9 +18,40 @@ public class GrpcSendPhotoService(
         IServerStreamWriter<PhotoStatusUpdate> responseStream,
         ServerCallContext context)
     {
+        async Task<bool> TryWriteAsync(PhotoStatusUpdate update)
+        {
+            if (context.CancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(
+                    "Skipping photo stream write for employeeId={EmployeeId} because request is already canceled.",
+                    request.EmployeeId);
+                return false;
+            }
+
+            try
+            {
+                await responseStream.WriteAsync(update);
+                return true;
+            }
+            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(
+                    "Photo stream write canceled for employeeId={EmployeeId}.",
+                    request.EmployeeId);
+                return false;
+            }
+            catch (InvalidOperationException) when (context.CancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(
+                    "Photo stream writer already completed for employeeId={EmployeeId}.",
+                    request.EmployeeId);
+                return false;
+            }
+        }
+
         if (!Guid.TryParse(request.EmployeeId, out var employeeId))
         {
-            await responseStream.WriteAsync(new PhotoStatusUpdate
+            await TryWriteAsync(new PhotoStatusUpdate
             {
                 Error = new Error { Message = "Invalid employee_id." }
             });
@@ -34,7 +65,7 @@ public class GrpcSendPhotoService(
                 var parts = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length >= 2 && int.TryParse(parts[1], out var count))
                 {
-                    await responseStream.WriteAsync(new PhotoStatusUpdate
+                    await TryWriteAsync(new PhotoStatusUpdate
                     {
                         PhotosReceived = new PhotosReceived { ReceivedCount = count }
                     });
@@ -44,14 +75,14 @@ public class GrpcSendPhotoService(
 
             if (message == "Start")
             {
-                await responseStream.WriteAsync(new PhotoStatusUpdate
+                await TryWriteAsync(new PhotoStatusUpdate
                 {
                     Start = new PhotoStart { Message = message }
                 });
                 return;
             }
 
-            await responseStream.WriteAsync(new PhotoStatusUpdate
+            await TryWriteAsync(new PhotoStatusUpdate
             {
                 RequestSent = new PhotoRequestSent { Message = message }
             });
@@ -66,17 +97,21 @@ public class GrpcSendPhotoService(
 
             if (!result.Success)
             {
-                await responseStream.WriteAsync(new PhotoStatusUpdate
+                await TryWriteAsync(new PhotoStatusUpdate
                 {
-                    Timeout = new PhotosTimeout { Message = result.Message }
+                    Error = new Error { Message = result.Message }
                 });
                 return;
             }
 
-            await responseStream.WriteAsync(new PhotoStatusUpdate
+            await TryWriteAsync(new PhotoStatusUpdate
             {
                 PhotosReady = new PhotosReady { SessionKey = result.SessionKey ?? string.Empty }
             });
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            // Client disconnected or request was canceled; no response can be written anymore.
         }
         catch (Exception ex)
         {
@@ -86,7 +121,7 @@ public class GrpcSendPhotoService(
                 ? ex.Message
                 : $"{ex.Message} | Inner: {ex.InnerException.Message}";
 
-            await responseStream.WriteAsync(new PhotoStatusUpdate
+            await TryWriteAsync(new PhotoStatusUpdate
             {
                 Error = new Error { Message = detail }
             });

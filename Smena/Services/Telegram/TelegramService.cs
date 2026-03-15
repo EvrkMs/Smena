@@ -250,7 +250,17 @@ public class TelegramService(
             throw new InvalidOperationException("Telegram token is not configured.");
         }
 
-        _botClient = new TelegramBotClient(_options.Token);
+        var handler = new SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(_options.ConnectTimeoutSeconds)
+        };
+
+        var httpClient = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(_options.HttpTimeoutSeconds)
+        };
+
+        _botClient = new TelegramBotClient(_options.Token, httpClient);
         return _botClient;
     }
 
@@ -276,6 +286,10 @@ public class TelegramService(
             {
                 return await action(client, ct);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex) when (IsTransient(ex) && attempt < RetryAttempts)
             {
                 lastError = ex;
@@ -300,6 +314,11 @@ public class TelegramService(
 
     private static bool IsTransient(Exception ex)
     {
+        if (ex is OperationCanceledException)
+        {
+            return false;
+        }
+
         if (ex is RequestException requestEx)
         {
             return requestEx.InnerException == null || IsTransient(requestEx.InnerException);
