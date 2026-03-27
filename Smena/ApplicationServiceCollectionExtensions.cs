@@ -28,6 +28,7 @@ internal static class ApplicationServiceCollectionExtensions
 
         services.AddSingleton<SafeUpdatesNotifier>();
         services.AddSingleton<PhotoSessionStore>();
+        services.AddHostedService<PhotoSessionCleanupService>();
         services.AddSingleton<TelegramUpdateOffsetStore>();
         services.AddSingleton<ITelegramScopeAccessor, TelegramScopeAccessor>();
 

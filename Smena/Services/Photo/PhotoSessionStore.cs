@@ -39,4 +39,19 @@ public class PhotoSessionStore
     {
         _sessions.TryRemove(key, out _);
     }
+
+    public int CleanupExpired(TimeSpan ttl)
+    {
+        var removed = 0;
+        var cutoff = DateTime.UtcNow - ttl;
+        foreach (var key in _sessions.Keys)
+        {
+            if (_sessions.TryGetValue(key, out var session) && session.CreatedAtUtc < cutoff)
+            {
+                if (_sessions.TryRemove(key, out _))
+                    removed++;
+            }
+        }
+        return removed;
+    }
 }

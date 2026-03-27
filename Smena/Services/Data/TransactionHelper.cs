@@ -18,7 +18,7 @@ public static class TransactionHelper
             {
                 try
                 {
-                    await tx.RollbackAsync(ct);
+                    await tx.RollbackAsync(CancellationToken.None);
                 }
                 catch
                 {

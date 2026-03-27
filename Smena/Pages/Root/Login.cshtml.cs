@@ -55,25 +55,8 @@ public class LoginModel(
 
     private string ResolveClientKey()
     {
-        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(forwardedFor))
-        {
-            var firstIp = forwardedFor
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .FirstOrDefault();
-
-            if (!string.IsNullOrWhiteSpace(firstIp))
-            {
-                return firstIp;
-            }
-        }
-
-        var realIp = Request.Headers["X-Real-IP"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(realIp))
-        {
-            return realIp.Trim();
-        }
-
+        // Trust only HttpContext.Connection.RemoteIpAddress which is set by
+        // ForwardedHeadersMiddleware from validated proxy headers.
         return HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 

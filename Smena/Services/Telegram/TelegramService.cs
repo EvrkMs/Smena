@@ -22,7 +22,8 @@ public class TelegramService(
     private readonly AppDbContext _db = db;
     private readonly ILogger<TelegramMessageScope> _scopeLogger = scopeLogger;
     private readonly ILogger<TelegramService> _logger = logger;
-    private ITelegramBotClient? _botClient;
+    private static ITelegramBotClient? s_sharedBotClient;
+    private static readonly object s_clientLock = new();
 
     public TelegramMessageScope CreateScope() => new(GetClientOrThrow(), _scopeLogger);
 
@@ -41,7 +42,7 @@ public class TelegramService(
             ? string.Empty
             : $" ({expense.SenderName})";
 
-        string msg = $"{DateTime.Now:yyyy.MM.dd HH:mm}\n{expense.Amount} {expense.Comment}{senderPart}";
+        string msg = $"{BusinessNow():yyyy.MM.dd HH:mm}\n{expense.Amount} {expense.Comment}{senderPart}";
 
         var message = await ExecuteWithRetryAsync(
             (bot, token) => bot.SendMessage(
@@ -91,7 +92,7 @@ public class TelegramService(
         CancellationToken ct)
     {
         string sign = amount >= 0 ? "+" : string.Empty;
-        string msg = $"{DateTime.Now:yyyy.MM.dd HH:mm}\n{sign}{amount} {comment}\nТеперь сейф: {currentSafe}";
+        string msg = $"{BusinessNow():yyyy.MM.dd HH:mm}\n{sign}{amount} {comment}\nТеперь сейф: {currentSafe}";
         int? threadId = _options.SafeThreadId > 0 ? _options.SafeThreadId : null;
 
         var message = await ExecuteWithRetryAsync(
@@ -132,7 +133,7 @@ public class TelegramService(
         string entryLabel = string.IsNullOrWhiteSpace(comment) ? action : comment;
 
         string sign = amount >= 0 ? "+" : string.Empty;
-        string msg = $"{DateTime.Now:yyyy.MM.dd HH:mm}\n{sign}{amount} {employee.Name} {entryLabel}\nТеперь: {currentSalary}";
+        string msg = $"{BusinessNow():yyyy.MM.dd HH:mm}\n{sign}{amount} {employee.Name} {entryLabel}\nТеперь: {currentSalary}";
 
         int? threadId = employee.SalaryThreadId > 0 ? employee.SalaryThreadId : null;
         var message = await ExecuteWithRetryAsync(
@@ -240,28 +241,37 @@ public class TelegramService(
 
     public ITelegramBotClient GetClientOrThrow()
     {
-        if (_botClient != null)
+        if (s_sharedBotClient != null)
+            return s_sharedBotClient;
+
+        lock (s_clientLock)
         {
-            return _botClient;
+            if (s_sharedBotClient != null)
+                return s_sharedBotClient;
+
+            if (string.IsNullOrWhiteSpace(_options.Token))
+                throw new InvalidOperationException("Telegram token is not configured.");
+
+            var handler = new SocketsHttpHandler
+            {
+                ConnectTimeout = TimeSpan.FromSeconds(_options.ConnectTimeoutSeconds),
+                PooledConnectionLifetime = TimeSpan.FromMinutes(15)
+            };
+
+            var httpClient = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(_options.HttpTimeoutSeconds)
+            };
+
+            s_sharedBotClient = new TelegramBotClient(_options.Token, httpClient);
+            return s_sharedBotClient;
         }
+    }
 
-        if (string.IsNullOrWhiteSpace(_options.Token))
-        {
-            throw new InvalidOperationException("Telegram token is not configured.");
-        }
-
-        var handler = new SocketsHttpHandler
-        {
-            ConnectTimeout = TimeSpan.FromSeconds(_options.ConnectTimeoutSeconds)
-        };
-
-        var httpClient = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromSeconds(_options.HttpTimeoutSeconds)
-        };
-
-        _botClient = new TelegramBotClient(_options.Token, httpClient);
-        return _botClient;
+    private static DateTimeOffset BusinessNow()
+    {
+        // Moscow time (UTC+3) — matches business timezone for Telegram messages.
+        return DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(3));
     }
 
     public Task<T> ExecuteWithRetryAsync<T>(
