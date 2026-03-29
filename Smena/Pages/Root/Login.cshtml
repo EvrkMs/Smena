@@ -2,95 +2,31 @@
 @model Host.Pages.Root.LoginModel
 @{
     ViewData["Title"] = "Вход в root-панель";
+    ViewData["PageClass"] = "root-login-page";
 }
+<div class="auth-panel">
+    <div class="eyebrow">root / auth</div>
+    <h1 class="auth-title">Вход в root-панель</h1>
+    <p class="auth-subtitle">Авторизация администратора для операций с зарплатой, инвентаризацией и настройками root-панели.</p>
 
-<!doctype html>
-<html lang="ru">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Вход в root-панель</title>
-    <style>
-        :root {
-            color-scheme: dark;
-            --bg: #0b1020;
-            --panel: #151d31;
-            --panel-border: #24314f;
-            --text: #e8eefc;
-            --muted: #9baacf;
-            --danger: #ff6f6f;
-            --accent: #2f8f58;
-            --accent-hover: #38a466;
-        }
-        * { box-sizing: border-box; }
-        html, body { margin: 0; min-height: 100%; }
-        body {
-            font-family: "Segoe UI", "Noto Sans", sans-serif;
-            background: radial-gradient(circle at top, #1a2748 0%, var(--bg) 60%);
-            color: var(--text);
-            display: grid;
-            place-items: center;
-            padding: 16px;
-        }
-        .wrap {
-            width: min(100%, 440px);
-            padding: 24px;
-            background: var(--panel);
-            border: 1px solid var(--panel-border);
-            border-radius: 14px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
-        }
-        h2 { margin: 0 0 16px 0; font-size: 1.4rem; }
-        label { display: block; margin: 10px 0 6px 0; color: var(--muted); }
-        input {
-            display: block;
-            width: 100%;
-            min-height: 44px;
-            padding: 10px 12px;
-            margin: 0 0 12px 0;
-            border: 1px solid #33456f;
-            border-radius: 10px;
-            background: #0d1529;
-            color: var(--text);
-            font: inherit;
-        }
-        input:focus {
-            outline: none;
-            border-color: #4e79d8;
-            box-shadow: 0 0 0 3px rgba(78, 121, 216, 0.2);
-        }
-        button {
-            width: 100%;
-            min-height: 44px;
-            padding: 10px 14px;
-            border: 0;
-            border-radius: 10px;
-            background: var(--accent);
-            color: #fff;
-            font: inherit;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background .15s ease;
-        }
-        button:hover { background: var(--accent-hover); }
-        .err { color: var(--danger); margin-bottom: 12px; }
-    </style>
-</head>
-<body>
-    <div class="wrap">
-        <h2>Вход в root-панель</h2>
+    @if (!ViewData.ModelState.IsValid && ViewData.ModelState.ErrorCount > 0)
+    {
+        <div asp-validation-summary="All" class="auth-error"></div>
+    }
 
-        <div asp-validation-summary="All" class="err"></div>
-
-        <form method="post">
-            <label>Логин</label>
+    <form method="post">
+        <div class="field">
+            <label class="field-label" asp-for="Username">Логин</label>
             <input asp-for="Username" autocomplete="username" />
+        </div>
 
-            <label>Пароль</label>
+        <div class="field">
+            <label class="field-label" asp-for="Password">Пароль</label>
             <input asp-for="Password" type="password" autocomplete="current-password" />
+        </div>
 
-            <button type="submit">Войти</button>
-        </form>
-    </div>
-</body>
-</html>
+        <div class="actions">
+            <button class="btn btn-ok btn-block" type="submit">Войти</button>
+        </div>
+    </form>
+</div>

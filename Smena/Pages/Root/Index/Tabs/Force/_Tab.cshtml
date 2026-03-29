@@ -1,0 +1,56 @@
+@model Host.Pages.Root.IndexModel
+@{
+    var activeTab = ViewData["ActiveTab"]?.ToString() ?? "force";
+}
+
+<div id="tab-force" class="tab-panel @(activeTab == "force" ? "active" : "")">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">⚡</div>
+            <div class="card-title">Принудительная выплата</div>
+        </div>
+
+        <form method="post" asp-page-handler="Force">
+            <div class="row-2" style="margin-bottom:14px">
+                <div class="field">
+                    <label class="field-label">Сотрудник</label>
+                    <select name="Force.EmployeeId" required>
+                        <option value="">— выберите сотрудника —</option>
+                        @foreach (var emp in Model.Employees)
+                        {
+                            <option value="@emp.Id">@emp.Name (₽ @emp.CurrentSalary)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field-label">Сумма, ₽</label>
+                    <input name="Force.Amount" type="number" min="1" placeholder="0" required />
+                </div>
+            </div>
+
+            <div class="row-2">
+                <div class="field">
+                    <label class="field-label">Комментарий</label>
+                    <input name="Force.Comment" type="text" placeholder="Необязательно" />
+                </div>
+                <div class="field">
+                    <label class="field-label">Опции</label>
+                    <div class="check-group">
+                        <label class="check-item">
+                            <input name="Force.IsSalary" type="checkbox" value="true" />
+                            <span>Выплата зарплаты (иначе аванс)</span>
+                        </label>
+                        <label class="check-item">
+                            <input name="Force.IsNonCash" type="checkbox" value="true" />
+                            <span>Безналичная (иначе из сейфа)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-warn" type="submit">⚡ Применить принудительную выплату</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -45,6 +45,7 @@ var app = builder.Build();
 await app.Services.ApplyDatabaseMigrationsAsync();
 
 app.UseForwardedHeaders();
+app.UseStaticFiles();
 app.UseMiddleware<RootPanelAuthMiddleware>();
 
 // Configure the HTTP request pipeline.

@@ -1,0 +1,81 @@
+@page "/root"
+@model Host.Pages.Root.IndexModel
+@{
+    ViewData["Title"] = "Панель root";
+    ViewData["PageClass"] = "root-index-page";
+    var activeTab = string.Equals(Model.Tab, "inventory", StringComparison.OrdinalIgnoreCase)
+        ? "inventory"
+        : string.Equals(Model.Tab, "salary", StringComparison.OrdinalIgnoreCase)
+            ? "salary"
+            : "force";
+}
+<div class="page">
+
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-badge">R</div>
+            <div class="header-title">
+                <h1>Root Panel</h1>
+                <span class="sub">Системное управление</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <form method="post" asp-page-handler="Logout">
+                <button class="btn btn-ghost" type="submit">Выйти →</button>
+            </form>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+    {
+        <div class="alert alert-ok">
+            <span class="alert-dot"></span>
+            <span>@Model.StatusMessage</span>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-err">
+            <span class="alert-dot"></span>
+            <span>@Model.ErrorMessage</span>
+        </div>
+    }
+
+    <nav class="tabs-nav">
+        <button class="tab-btn @(activeTab == "force" ? "active" : "")"
+                data-tab="force" type="button" onclick="showTab('force')">
+            Принудительная выплата
+        </button>
+        <button class="tab-btn @(activeTab == "inventory" ? "active" : "")"
+                data-tab="inventory" type="button" onclick="showTab('inventory')">
+            Инвентаризация
+        </button>
+        <button class="tab-btn @(activeTab == "salary" ? "active" : "")"
+                data-tab="salary" type="button" onclick="showTab('salary')">
+            Операции по зарплате
+        </button>
+    </nav>
+
+    <partial name="Tabs/Force/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
+    <partial name="Tabs/Inventory/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
+    <partial name="Tabs/Salary/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
+    <partial name="Tabs/Employees/_Table" model="Model" />
+
+</div>
+
+@section Scripts {
+<script>
+    function showTab(tab) {
+        document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+
+        const panel = document.getElementById('tab-' + tab);
+        if (panel) panel.classList.add('active');
+
+        const btn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+        if (btn) btn.classList.add('active');
+
+        history.replaceState(null, '', '/root?tab=' + tab);
+    }
+</script>
+}

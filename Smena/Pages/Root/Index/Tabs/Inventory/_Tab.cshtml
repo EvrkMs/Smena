@@ -1,0 +1,88 @@
+@model Host.Pages.Root.IndexModel
+@{
+    var activeTab = ViewData["ActiveTab"]?.ToString() ?? "force";
+}
+
+<div id="tab-inventory" class="tab-panel @(activeTab == "inventory" ? "active" : "")">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">🔍</div>
+            <div class="card-title">Фильтр периода</div>
+        </div>
+
+        <form method="get">
+            <input type="hidden" name="tab" value="inventory" />
+            <div class="row-3" style="margin-bottom:14px">
+                <div class="field">
+                    <label class="field-label">С</label>
+                    <input type="datetime-local" name="InventoryFrom"
+                           value="@(Model.InventoryFrom?.ToString("yyyy-MM-ddTHH:mm"))" />
+                </div>
+                <div class="field">
+                    <label class="field-label">По</label>
+                    <input type="datetime-local" name="InventoryTo"
+                           value="@(Model.InventoryTo?.ToString("yyyy-MM-ddTHH:mm"))" />
+                </div>
+                <div class="field">
+                    <label class="field-label">Минимум часов</label>
+                    <input type="number" min="1" name="InventoryHours"
+                           placeholder="Любое"
+                           value="@(Model.InventoryHours?.ToString() ?? string.Empty)" />
+                </div>
+            </div>
+            <div class="actions" style="padding-top:0; border-top:none; margin-top:0">
+                <button class="btn btn-primary" type="submit">Применить фильтр</button>
+                <a class="btn btn-ghost" href="/root?tab=inventory">Сбросить</a>
+            </div>
+        </form>
+        <p class="hint">Если указаны часы — показаны только сотрудники с не меньшим количеством отработанных часов за выбранный период.</p>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">📦</div>
+            <div class="card-title">Инвентаризация</div>
+        </div>
+
+        <form method="post" asp-page-handler="Inventory">
+            <input type="hidden" name="InventoryFrom" value="@(Model.InventoryFrom?.ToString("yyyy-MM-ddTHH:mm"))" />
+            <input type="hidden" name="InventoryTo" value="@(Model.InventoryTo?.ToString("yyyy-MM-ddTHH:mm"))" />
+            <input type="hidden" name="InventoryHours" value="@(Model.InventoryHours?.ToString() ?? string.Empty)" />
+
+            <div class="row-2" style="margin-bottom:16px">
+                <div class="field">
+                    <label class="field-label">Общая сумма, ₽</label>
+                    <input name="Inventory.TotalAmount" type="number" min="1" placeholder="0" required />
+                </div>
+                <div class="field">
+                    <label class="field-label">Комментарий</label>
+                    <input name="Inventory.Comment" type="text" placeholder="Необязательно" />
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="field-label">Сотрудники</label>
+                <div class="emp-list">
+                    @if (Model.InventoryEmployees.Count == 0)
+                    {
+                        <div class="empty">По фильтру нет сотрудников</div>
+                    }
+                    else
+                    {
+                        @foreach (var emp in Model.InventoryEmployees)
+                        {
+                            <label class="check-item">
+                                <input type="checkbox" name="Inventory.EmployeeIds" value="@emp.Id" />
+                                <span>@emp.Name — <span style="color:var(--text-muted)">₽ @emp.CurrentSalary · @emp.PeriodHours ч.</span></span>
+                            </label>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-ok" type="submit">✓ Применить инвентаризацию</button>
+            </div>
+        </form>
+    </div>
+</div>

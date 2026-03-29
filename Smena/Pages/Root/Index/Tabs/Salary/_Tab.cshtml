@@ -1,0 +1,66 @@
+@model Host.Pages.Root.IndexModel
+@{
+    var activeTab = ViewData["ActiveTab"]?.ToString() ?? "force";
+}
+
+<div id="tab-salary" class="tab-panel @(activeTab == "salary" ? "active" : "")">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">₽</div>
+            <div class="card-title">Ручная операция по зарплате</div>
+        </div>
+
+        <form method="post" asp-page-handler="Salary">
+            <div class="row-2" style="margin-bottom:14px">
+                <div class="field">
+                    <label class="field-label">Сотрудник</label>
+                    <select name="Salary.EmployeeId" required>
+                        <option value="">— выберите сотрудника —</option>
+                        @foreach (var emp in Model.Employees)
+                        {
+                            <option value="@emp.Id">@emp.Name (₽ @emp.CurrentSalary)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field-label">Сумма, ₽</label>
+                    <input name="Salary.Amount" type="number" min="1" placeholder="0" required />
+                </div>
+            </div>
+
+            <div class="row-2" style="margin-bottom:14px">
+                <div class="field">
+                    <label class="field-label">Направление</label>
+                    <select name="Salary.IsIncrease">
+                        <option value="true">↑ Начислить</option>
+                        <option value="false">↓ Списать</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field-label">Категория</label>
+                    <select name="Salary.Type">
+                        <optgroup label="── Начисление">
+                            <option value="1">Обычная</option>
+                            <option value="2">Премия</option>
+                        </optgroup>
+                        <optgroup label="── Списание">
+                            <option value="3">Аванс</option>
+                            <option value="4">Инвентаризация</option>
+                            <option value="5">Штраф</option>
+                            <option value="6">Выплата</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="field-label">Комментарий</label>
+                <input name="Salary.Comment" type="text" placeholder="Необязательно" />
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-ok" type="submit">✓ Применить операцию</button>
+            </div>
+        </form>
+    </div>
+</div>

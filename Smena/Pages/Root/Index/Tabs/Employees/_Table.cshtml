@@ -1,0 +1,37 @@
+@model Host.Pages.Root.IndexModel
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-icon">👥</div>
+        <div class="card-title">Сотрудники</div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Имя</th>
+                    <th>Ставка / час</th>
+                    <th>Текущий баланс</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var emp in Model.Employees)
+            {
+                <tr>
+                    <td>@emp.Name</td>
+                    <td>@emp.HourlyRate ₽</td>
+                    <td>
+                        @{
+                            var cls = emp.CurrentSalary > 0 ? "salary-pos"
+                                    : emp.CurrentSalary < 0 ? "salary-neg"
+                                    : "salary-zero";
+                            var sign = emp.CurrentSalary > 0 ? "+" : "";
+                        }
+                        <span class="salary-badge @cls">@sign@emp.CurrentSalary ₽</span>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
