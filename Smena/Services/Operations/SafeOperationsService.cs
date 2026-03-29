@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Host.Services.Data;
 using Host.Services.Data.Entities;
 using Host.Services.Telegram;
@@ -5,10 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Host.Services.Operations;
 
-public class SafeOperationsService(AppDbContext db, TelegramService telegramService)
+public class SafeOperationsService(
+    AppDbContext db,
+    TelegramService telegramService,
+    SafeUpdatesNotifier notifier)
 {
     private readonly AppDbContext _db = db;
     private readonly TelegramService _telegramService = telegramService;
+    private readonly SafeUpdatesNotifier _notifier = notifier;
 
     public async Task<int> GetCurrentSafeAsync(CancellationToken ct)
     {
@@ -57,6 +62,29 @@ public class SafeOperationsService(AppDbContext db, TelegramService telegramServ
             scope,
             ct);
 
+        _notifier.Publish(updatedSafe);
+
         return updatedSafe;
+    }
+
+    public Channel<long> Subscribe() => _notifier.Subscribe();
+
+    public void Unsubscribe(Channel<long> channel) => _notifier.Unsubscribe(channel);
+
+    /// <summary>
+    /// Applies a safe operation within a transaction and persists changes.
+    /// Use this when the safe operation is the only DB change in the call.
+    /// </summary>
+    public async Task ApplyAndSaveAsync(
+        int signedAmount,
+        string comment,
+        TelegramMessageScope scope,
+        CancellationToken ct)
+    {
+        await TransactionHelper.ExecuteAsync(_db, async () =>
+        {
+            await ApplySafeOperationAsync(signedAmount, comment, scope, ct);
+            await _db.SaveChangesAsync(ct);
+        }, ct);
     }
 }

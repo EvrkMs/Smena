@@ -36,6 +36,12 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<TelegramPhotoRequestService>();
         services.AddScoped<SafeOperationsService>();
         services.AddScoped<SalaryOperationsService>();
+        services.AddScoped<NonCashOperationsService>();
+        services.AddScoped<AdvanceOperationsService>();
+        services.AddScoped<ExpenseOperationsService>();
+        services.AddScoped<RaportOperationsService>();
+        services.AddScoped<InventoryOperationsService>();
+        services.AddScoped<EmployeeOperationsService>();
 
         services.AddRootPanelServices(configuration);
 
