@@ -9,11 +9,13 @@ namespace Host.Services;
 
 public class GrpcSafeService(
     SafeOperationsService safeOperationsService,
-    ITelegramScopeAccessor scopeAccessor)
+    ITelegramScopeAccessor scopeAccessor,
+    IHostApplicationLifetime appLifetime)
     : Host.Grpc.Services.Safe.GrpcSafeService.GrpcSafeServiceBase
 {
     private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
     private readonly ITelegramScopeAccessor _scopeAccessor = scopeAccessor;
+    private readonly IHostApplicationLifetime _appLifetime = appLifetime;
 
     public override async Task<CurrentSafeResponse> CurrentSafe(Empty request, ServerCallContext context)
     {
@@ -52,20 +54,24 @@ public class GrpcSafeService(
     public override async Task SubscribeSafe(Empty request, IServerStreamWriter<CurrentSafeResponse> responseStream, ServerCallContext context)
     {
         var channel = _safeOperationsService.Subscribe();
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            context.CancellationToken,
+            _appLifetime.ApplicationStopping);
+        var cancellationToken = linkedCts.Token;
 
         try
         {
-            var currentSafe = await _safeOperationsService.GetCurrentSafeAsync(context.CancellationToken);
+            var currentSafe = await _safeOperationsService.GetCurrentSafeAsync(cancellationToken);
             await responseStream.WriteAsync(new CurrentSafeResponse { Current = currentSafe });
 
-            await foreach (var value in channel.Reader.ReadAllAsync(context.CancellationToken))
+            await foreach (var value in channel.Reader.ReadAllAsync(cancellationToken))
             {
                 await responseStream.WriteAsync(new CurrentSafeResponse { Current = value });
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested || _appLifetime.ApplicationStopping.IsCancellationRequested)
         {
-            // client disconnected
+            // client disconnected or app is shutting down
         }
         finally
         {
