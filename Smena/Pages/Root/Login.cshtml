@@ -2,7 +2,7 @@
 @model Host.Pages.Root.LoginModel
 @{
     ViewData["Title"] = "Вход в root-панель";
-    ViewData["PageClass"] = "root-login-page";
+    ViewData["PageClass"] = "min-h-screen flex items-center justify-center p-6 relative z-10";
 }
 <div class="auth-panel">
     <div class="eyebrow">root / auth</div>
@@ -17,16 +17,16 @@
     <form method="post">
         <div class="field">
             <label class="field-label" asp-for="Username">Логин</label>
-            <input asp-for="Username" autocomplete="username" />
+            <input class="glass-input" asp-for="Username" autocomplete="username" />
         </div>
 
         <div class="field">
             <label class="field-label" asp-for="Password">Пароль</label>
-            <input asp-for="Password" type="password" autocomplete="current-password" />
+            <input class="glass-input glass-input-password" asp-for="Password" type="password" autocomplete="current-password" />
         </div>
 
         <div class="actions">
-            <button class="btn btn-ok btn-block" type="submit">Войти</button>
+            <button class="btn btn-primary btn-block" type="submit">Войти</button>
         </div>
     </form>
 </div>

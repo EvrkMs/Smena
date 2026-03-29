@@ -50,7 +50,9 @@ public class LoginModel(
 
         _loginRateLimiter.RegisterSuccess(clientKey);
         RootPanelAuthMiddleware.AppendAuthCookies(Response, tokenPair);
-        return Redirect(mustChangePassword ? "/root/change-password" : "/root");
+        return mustChangePassword
+            ? RedirectToPage("/Root/ChangePassword")
+            : RedirectToPage("/Root/Index/Index");
     }
 
     private string ResolveClientKey()

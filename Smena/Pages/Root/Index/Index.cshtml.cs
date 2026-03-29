@@ -102,6 +102,6 @@ public partial class IndexModel(
         }
 
         RootPanelAuthMiddleware.ClearAuthCookies(Response);
-        return Redirect("/root/login");
+        return RedirectToPage("/Root/Login");
     }
 }

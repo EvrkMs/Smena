@@ -7,6 +7,12 @@ RUN dotnet restore Smena/Host.csproj
 
 COPY ./Smena ./Smena
 WORKDIR /src/Smena
+
+# Build Tailwind CSS
+ADD https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+RUN chmod +x /usr/local/bin/tailwindcss \
+    && tailwindcss -i wwwroot/css/input.css -o wwwroot/css/root-ui.css --minify
+
 RUN dotnet publish Host.csproj -c Release -o /app/publish /p:UseAppHost=false --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final

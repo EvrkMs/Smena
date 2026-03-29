@@ -3,18 +3,18 @@
     var activeTab = ViewData["ActiveTab"]?.ToString() ?? "force";
 }
 
-<div id="tab-salary" class="tab-panel @(activeTab == "salary" ? "active" : "")">
+<div id="tab-salary" class="tab-panel @(activeTab == "salary" ? "active" : "")" role="tabpanel" aria-labelledby="tab-btn-salary">
     <div class="card">
         <div class="card-header">
             <div class="card-icon">₽</div>
             <div class="card-title">Ручная операция по зарплате</div>
         </div>
 
-        <form method="post" asp-page-handler="Salary">
+        <form method="post" asp-page-handler="Salary" id="salary-form">
             <div class="row-2" style="margin-bottom:14px">
                 <div class="field">
-                    <label class="field-label">Сотрудник</label>
-                    <select name="Salary.EmployeeId" required>
+                    <label class="field-label" for="salary-employee">Сотрудник</label>
+                    <select id="salary-employee" class="glass-input glass-select" name="Salary.EmployeeId" required>
                         <option value="">— выберите сотрудника —</option>
                         @foreach (var emp in Model.Employees)
                         {
@@ -23,39 +23,39 @@
                     </select>
                 </div>
                 <div class="field">
-                    <label class="field-label">Сумма, ₽</label>
-                    <input name="Salary.Amount" type="number" min="1" placeholder="0" required />
+                    <label class="field-label" for="salary-amount">Сумма, ₽</label>
+                    <input id="salary-amount" class="glass-input" name="Salary.Amount" type="number" min="1" placeholder="0" required />
                 </div>
             </div>
 
             <div class="row-2" style="margin-bottom:14px">
                 <div class="field">
-                    <label class="field-label">Направление</label>
-                    <select name="Salary.IsIncrease">
+                    <label class="field-label" for="salary-direction">Направление</label>
+                    <select id="salary-direction" class="glass-input glass-select" name="Salary.IsIncrease">
                         <option value="true">↑ Начислить</option>
                         <option value="false">↓ Списать</option>
                     </select>
                 </div>
                 <div class="field">
-                    <label class="field-label">Категория</label>
-                    <select name="Salary.Type">
+                    <label class="field-label" for="salary-type">Категория</label>
+                    <select id="salary-type" class="glass-input glass-select" name="Salary.Type">
                         <optgroup label="── Начисление">
-                            <option value="1">Обычная</option>
-                            <option value="2">Премия</option>
+                            <option value="1" data-direction="true">Обычная</option>
+                            <option value="2" data-direction="true">Премия</option>
                         </optgroup>
                         <optgroup label="── Списание">
-                            <option value="3">Аванс</option>
-                            <option value="4">Инвентаризация</option>
-                            <option value="5">Штраф</option>
-                            <option value="6">Выплата</option>
+                            <option value="3" data-direction="false">Аванс</option>
+                            <option value="4" data-direction="false">Инвентаризация</option>
+                            <option value="5" data-direction="false">Штраф</option>
+                            <option value="6" data-direction="false">Выплата</option>
                         </optgroup>
                     </select>
                 </div>
             </div>
 
             <div class="field">
-                <label class="field-label">Комментарий</label>
-                <input name="Salary.Comment" type="text" placeholder="Необязательно" />
+                <label class="field-label" for="salary-comment">Комментарий</label>
+                <input id="salary-comment" class="glass-input" name="Salary.Comment" type="text" placeholder="Необязательно" />
             </div>
 
             <div class="actions">
@@ -64,3 +64,30 @@
         </form>
     </div>
 </div>
+
+<script>
+(function () {
+    var dir = document.getElementById('salary-direction');
+    var type = document.getElementById('salary-type');
+    if (!dir || !type) return;
+
+    function syncOptions() {
+        var isIncrease = dir.value === 'true';
+        var opts = type.querySelectorAll('option[data-direction]');
+        var firstVisible = null;
+        opts.forEach(function (o) {
+            var match = o.getAttribute('data-direction') === dir.value;
+            o.hidden = !match;
+            o.disabled = !match;
+            if (match && !firstVisible) firstVisible = o;
+        });
+        var current = type.querySelector('option:checked');
+        if (current && (current.hidden || current.disabled)) {
+            if (firstVisible) firstVisible.selected = true;
+        }
+    }
+
+    dir.addEventListener('change', syncOptions);
+    syncOptions();
+})();
+</script>

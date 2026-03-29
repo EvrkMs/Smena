@@ -19,13 +19,13 @@ public partial class IndexModel
         if (Inventory.TotalAmount <= 0)
         {
             ErrorMessage = "Сумма инвентаризации должна быть больше 0.";
-            return Redirect(BuildInventoryRedirectUrl());
+            return RedirectToPage(BuildInventoryRouteValues());
         }
 
         if (ids.Count == 0)
         {
             ErrorMessage = "Выберите хотя бы одного сотрудника.";
-            return Redirect(BuildInventoryRedirectUrl());
+            return RedirectToPage(BuildInventoryRouteValues());
         }
 
         var employees = await _db.Employees
@@ -37,7 +37,7 @@ public partial class IndexModel
         if (employees.Count == 0)
         {
             ErrorMessage = "Сотрудники не найдены.";
-            return Redirect(BuildInventoryRedirectUrl());
+            return RedirectToPage(BuildInventoryRouteValues());
         }
 
         var perEmployee = Inventory.TotalAmount / employees.Count;
@@ -79,7 +79,7 @@ public partial class IndexModel
             ErrorMessage = ex.Message;
         }
 
-        return Redirect(BuildInventoryRedirectUrl());
+        return RedirectToPage(BuildInventoryRouteValues());
     }
 
     private async Task<List<EmployeeSnapshot>> BuildInventoryEmployeesAsync(
@@ -154,26 +154,26 @@ public partial class IndexModel
         return filtered;
     }
 
-    private string BuildInventoryRedirectUrl()
+    private object BuildInventoryRouteValues()
     {
-        var query = new List<string> { "tab=inventory" };
+        var values = new Dictionary<string, object?> { ["tab"] = "inventory" };
 
         if (InventoryFrom.HasValue)
         {
-            query.Add($"InventoryFrom={Uri.EscapeDataString(InventoryFrom.Value.ToString("yyyy-MM-ddTHH:mm"))}");
+            values["InventoryFrom"] = InventoryFrom.Value.ToString("yyyy-MM-ddTHH:mm");
         }
 
         if (InventoryTo.HasValue)
         {
-            query.Add($"InventoryTo={Uri.EscapeDataString(InventoryTo.Value.ToString("yyyy-MM-ddTHH:mm"))}");
+            values["InventoryTo"] = InventoryTo.Value.ToString("yyyy-MM-ddTHH:mm");
         }
 
         if (InventoryHours.HasValue && InventoryHours.Value > 0)
         {
-            query.Add($"InventoryHours={InventoryHours.Value}");
+            values["InventoryHours"] = InventoryHours.Value;
         }
 
-        return $"/root?{string.Join("&", query)}";
+        return values;
     }
 
     private DateTime? ToUtc(DateTime? value)

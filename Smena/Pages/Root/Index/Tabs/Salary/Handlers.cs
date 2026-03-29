@@ -12,32 +12,32 @@ public partial class IndexModel
         if (!Guid.TryParse(Salary.EmployeeId, out var employeeId))
         {
             ErrorMessage = "Некорректный сотрудник.";
-            return Redirect("/root?tab=salary");
+            return RedirectToPage(new { tab = "salary" });
         }
 
         if (Salary.Amount <= 0)
         {
             ErrorMessage = "Сумма должна быть больше 0.";
-            return Redirect("/root?tab=salary");
+            return RedirectToPage(new { tab = "salary" });
         }
 
         if (!Enum.IsDefined(Salary.Type))
         {
             ErrorMessage = "Некорректный тип операции по зарплате.";
-            return Redirect("/root?tab=salary");
+            return RedirectToPage(new { tab = "salary" });
         }
 
         var isPositiveType = Salary.Type is SalaryOperationType.Regular or SalaryOperationType.Bonus;
         if (Salary.IsIncrease && !isPositiveType)
         {
             ErrorMessage = "Выбранный тип доступен только для списания.";
-            return Redirect("/root?tab=salary");
+            return RedirectToPage(new { tab = "salary" });
         }
 
         if (!Salary.IsIncrease && isPositiveType)
         {
             ErrorMessage = "Выбранный тип доступен только для начисления.";
-            return Redirect("/root?tab=salary");
+            return RedirectToPage(new { tab = "salary" });
         }
 
         var employee = await _db.Employees
@@ -47,7 +47,7 @@ public partial class IndexModel
         if (employee == null)
         {
             ErrorMessage = "Сотрудник не найден.";
-            return Redirect("/root?tab=salary");
+            return RedirectToPage(new { tab = "salary" });
         }
 
         var signedAmount = Salary.IsIncrease ? Salary.Amount : -Salary.Amount;
@@ -79,6 +79,6 @@ public partial class IndexModel
             ErrorMessage = ex.Message;
         }
 
-        return Redirect("/root?tab=salary");
+        return RedirectToPage(new { tab = "salary" });
     }
 }

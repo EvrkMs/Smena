@@ -12,13 +12,13 @@ public partial class IndexModel
         if (!Guid.TryParse(Force.EmployeeId, out var employeeId))
         {
             ErrorMessage = "Некорректный сотрудник.";
-            return Redirect("/root?tab=force");
+            return RedirectToPage(new { tab = "force" });
         }
 
         if (Force.Amount <= 0)
         {
             ErrorMessage = "Сумма должна быть больше 0.";
-            return Redirect("/root?tab=force");
+            return RedirectToPage(new { tab = "force" });
         }
 
         var employee = await _db.Employees
@@ -28,7 +28,7 @@ public partial class IndexModel
         if (employee == null)
         {
             ErrorMessage = "Сотрудник не найден.";
-            return Redirect("/root?tab=force");
+            return RedirectToPage(new { tab = "force" });
         }
 
         var scope = _telegramService.CreateScope();
@@ -84,6 +84,6 @@ public partial class IndexModel
             ErrorMessage = ex.Message;
         }
 
-        return Redirect("/root?tab=force");
+        return RedirectToPage(new { tab = "force" });
     }
 }

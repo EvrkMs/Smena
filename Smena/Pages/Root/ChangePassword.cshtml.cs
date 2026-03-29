@@ -27,7 +27,7 @@ public class ChangePasswordModel(IRootPanelAuthService authService) : PageModel
         if (!_authService.IsAccessTokenValid(accessToken))
         {
             RootPanelAuthMiddleware.ClearAuthCookies(Response);
-            return Redirect("/root/login");
+            return RedirectToPage("/Root/Login");
         }
 
         if (string.IsNullOrWhiteSpace(NewPassword) || NewPassword.Length < 6)
@@ -49,6 +49,6 @@ public class ChangePasswordModel(IRootPanelAuthService authService) : PageModel
         }
 
         RootPanelAuthMiddleware.AppendAuthCookies(Response, tokenPair);
-        return Redirect("/root");
+        return RedirectToPage("/Root/Index/Index");
     }
 }

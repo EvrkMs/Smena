@@ -46,6 +46,7 @@ html, body {
 
 body {
     font-family: var(--sans);
+    font-size: 16px;
     color: var(--text);
 }
 
@@ -216,7 +217,6 @@ textarea {
 .field-label,
 label.field-label,
 .field > label,
-.table-label,
 .auth-subtitle,
 .subtle-link {
     font-family: var(--mono);
@@ -225,8 +225,7 @@ label.field-label,
 .header-title .sub,
 .field-label,
 label.field-label,
-.field > label,
-.table-label {
+.field > label {
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: .1em;
@@ -587,6 +586,8 @@ select optgroup {
     border: 1px solid var(--border);
     border-radius: var(--r-sm);
     background: var(--surface-2);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-2) transparent;
 }
 
 .emp-list::-webkit-scrollbar {
@@ -662,6 +663,13 @@ select optgroup {
 .btn-primary:hover {
     background: var(--accent-hover);
     box-shadow: 0 4px 16px rgba(53,103,208,.4);
+}
+
+.btn:focus-visible,
+.tab-btn:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--accent-glow);
 }
 
 .btn-ok {
@@ -820,6 +828,16 @@ td:nth-child(n+2) {
     color: var(--text-muted);
 }
 
+.arrow {
+    display: inline-block;
+    margin-left: 2px;
+    transition: transform .15s;
+}
+
+.btn:hover .arrow {
+    transform: translateX(2px);
+}
+
 @keyframes slideUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -843,6 +861,16 @@ td:nth-child(n+2) {
 @keyframes panelIn {
     from { opacity: 0; }
     to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 @media (max-width: 700px) {
