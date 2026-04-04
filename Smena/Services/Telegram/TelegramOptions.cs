@@ -12,4 +12,10 @@ public class TelegramOptions
     public int RaportThreadId { get; set; }
     public int ExpensesThreadId { get; set; }
     public int SafeThreadId { get; set; }
+
+    /// <summary>
+    /// Optional SOCKS5/HTTP proxy URI for Telegram API calls.
+    /// Example: socks5://tg-socks:1080
+    /// </summary>
+    public string? ProxyUri { get; set; }
 }

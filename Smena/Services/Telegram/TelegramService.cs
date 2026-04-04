@@ -258,6 +258,13 @@ public class TelegramService(
                 PooledConnectionLifetime = TimeSpan.FromMinutes(15)
             };
 
+            if (!string.IsNullOrWhiteSpace(_options.ProxyUri))
+            {
+                handler.Proxy = new System.Net.WebProxy(_options.ProxyUri);
+                handler.UseProxy = true;
+                _logger.LogInformation("Telegram: using proxy {ProxyUri}", _options.ProxyUri);
+            }
+
             var httpClient = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromSeconds(_options.HttpTimeoutSeconds)
