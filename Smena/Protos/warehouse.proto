@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Warehouse";
+
+import "google/protobuf/empty.proto";
+
+message GrpcWarehouseItem {
+  string name    = 1;
+  string article = 2;
+  string folder  = 3;
+  double stock   = 4;
+}
+
+message GrpcWarehouseItemsResponse {
+  repeated GrpcWarehouseItem items             = 1;
+  string                     last_refreshed_utc = 2;
+}
+
+message GrpcWarehouseSearchRequest {
+  string query = 1;
+  int32  limit = 2;
+}
+
+service GrpcWarehouseService {
+  // Весь список из кэша (для вкладки пересчёта)
+  rpc GetAllItems(google.protobuf.Empty)           returns (GrpcWarehouseItemsResponse);
+  // Быстрый поиск по имени / артикулу
+  rpc SearchItems(GrpcWarehouseSearchRequest)      returns (GrpcWarehouseItemsResponse);
+}

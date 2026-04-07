@@ -5,6 +5,7 @@ using Host.Services.RootPanel;
 using Host.Services.Telegram;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Diagnostics;
 
 namespace Host.Pages.Root;
 
@@ -15,7 +16,8 @@ public partial class IndexModel(
     SafeOperationsService safeOperationsService,
     SafeUpdatesNotifier safeUpdatesNotifier,
     IRootPanelAuthService authService,
-    IConfiguration configuration) : PageModel
+    IConfiguration configuration,
+    ILogger<IndexModel> logger) : PageModel
 {
     private readonly AppDbContext _db = db;
     private readonly TelegramService _telegramService = telegramService;
@@ -23,6 +25,7 @@ public partial class IndexModel(
     private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
     private readonly SafeUpdatesNotifier _safeUpdatesNotifier = safeUpdatesNotifier;
     private readonly IRootPanelAuthService _authService = authService;
+    private readonly ILogger<IndexModel> _logger = logger;
     private readonly TimeSpan _businessUtcOffset = TimeSpan.FromHours(
         configuration.GetValue<int?>("RootPanel:TimeZoneOffsetHours") ?? 3);
 
@@ -90,7 +93,10 @@ public partial class IndexModel(
 
     public async Task OnGetAsync(CancellationToken ct)
     {
+        var sw = Stopwatch.StartNew();
+        _logger.LogInformation("[Index] OnGetAsync start, Tab={Tab}", Tab);
         await LoadEmployeesAsync(ct);
+        _logger.LogInformation("[Index] OnGetAsync complete in {Ms}ms", sw.ElapsedMilliseconds);
     }
 
     public IActionResult OnPostLogout()

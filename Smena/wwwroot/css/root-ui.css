@@ -873,6 +873,67 @@ td:nth-child(n+2) {
     }
 }
 
+/* ── Warehouse table ── */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead th {
+    padding: 10px 14px;
+    text-align: left;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: .875rem;
+    color: var(--text-muted);
+    font-family: var(--mono);
+}
+
+.data-table td:first-child {
+    color: var(--text);
+    font-family: var(--sans, inherit);
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+    background: rgba(53,103,208,.05);
+}
+
+.table-group-row td {
+    background: var(--surface-2) !important;
+    color: var(--text-dim) !important;
+    font-family: var(--mono) !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    letter-spacing: .08em !important;
+    text-transform: uppercase !important;
+    padding: 6px 14px !important;
+    border-top: 1px solid var(--border);
+}
+
+.data-table .text-right { text-align: right; }
+.data-table thead th.text-right { text-align: right; }
+
+/* stock-quantity colours — override muted inherited colour */
+.text-red-400    { color: #f87171 !important; }
+.text-yellow-400 { color: #facc15 !important; }
+.text-green-400  { color: #4ade80 !important; }
+
 @media (max-width: 700px) {
     .row-2,
     .row-3 {

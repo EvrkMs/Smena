@@ -30,7 +30,7 @@ public sealed class RootPanelAuthMiddleware(
             if (_authService.MustChangePassword(accessToken ?? string.Empty) &&
                 !IsChangePasswordEndpoint(context.Request.Path))
             {
-                context.Response.Redirect("/root/change-password");
+                context.Response.Redirect(context.Request.PathBase + "/root/change-password");
                 return;
             }
 
@@ -47,7 +47,7 @@ public sealed class RootPanelAuthMiddleware(
         }
 
         ClearAuthCookies(context.Response);
-        context.Response.Redirect("/root/login");
+        context.Response.Redirect(context.Request.PathBase + "/root/login");
     }
 
     public static void AppendAuthCookies(HttpResponse response, RootPanelTokenPair tokenPair)

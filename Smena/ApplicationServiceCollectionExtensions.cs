@@ -4,6 +4,7 @@ using Host.Services.Photo;
 using Host.Services.RootPanel;
 using Host.Services.Security;
 using Host.Services.Telegram;
+using Host.Services.Warehouse;
 using Microsoft.EntityFrameworkCore;
 
 namespace Host;
@@ -44,6 +45,20 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddScoped<EmployeeOperationsService>();
 
         services.AddRootPanelServices(configuration);
+
+        services.Configure<WarehouseOptions>(
+            configuration.GetSection(WarehouseOptions.SectionName));
+        services.AddHttpClient<SkladHttpClient>(c =>
+        {
+            c.Timeout = TimeSpan.FromSeconds(10);
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+        });
+        services.AddScoped<WarehouseService>();
+        // Singleton cache: загружается при старте, переиспользуется всеми запросами
+        services.AddSingleton<SkladCacheService>();
+        services.AddHostedService(sp => sp.GetRequiredService<SkladCacheService>());
 
         return services;
     }
