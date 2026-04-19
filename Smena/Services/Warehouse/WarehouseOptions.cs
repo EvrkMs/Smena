@@ -26,7 +26,7 @@ public sealed class WarehouseOptions
     public int Limit { get; set; } = 500;
 
     /// <summary>How often (minutes) to refresh the local items cache. Default: 30.</summary>
-    public int CacheRefreshMinutes { get; set; } = 30;
+    public int CacheRefreshMinutes { get; set; } = 5;
 }
 
 public enum WarehouseAuthMode
