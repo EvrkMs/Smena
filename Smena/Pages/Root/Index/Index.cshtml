@@ -57,11 +57,17 @@
                 data-tab="salary" type="button" onclick="showTab('salary')">
             Операции по зарплате
         </button>
+        <button id="tab-btn-raports" class="tab-btn @(activeTab == "raports" ? "active" : "")"
+                role="tab" aria-selected="@(activeTab == "raports" ? "true" : "false")" aria-controls="tab-raports"
+                data-tab="raports" type="button" onclick="showTab('raports')">
+            Раппорты
+        </button>
     </nav>
 
     <partial name="Tabs/Force/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
     <partial name="Tabs/Inventory/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
     <partial name="Tabs/Salary/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
+    <partial name="Tabs/Raports/_Tab" model="Model" view-data='new ViewDataDictionary(ViewData) { ["ActiveTab"] = activeTab }' />
     <partial name="Tabs/Employees/_Table" model="Model" />
 
 </div>

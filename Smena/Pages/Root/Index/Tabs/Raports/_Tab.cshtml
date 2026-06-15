@@ -1,0 +1,250 @@
+@model Host.Pages.Root.IndexModel
+
+<div id="tab-raports" class="tab-panel @(ViewData["ActiveTab"]?.ToString() == "raports" ? "active" : "")" role="tabpanel" aria-labelledby="tab-btn-raports">
+
+    <!-- Период -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">📅</div>
+            <div class="card-title">Период отчёта</div>
+        </div>
+
+        <form method="get" id="raports-period-form" class="space-y-6">
+            <input type="hidden" name="tab" value="raports" />
+
+            <div class="row-2">
+                <div class="field">
+                    <label class="field-label" for="raport-from">С</label>
+                    <input id="raport-from" name="RaportFrom" type="date" 
+                           class="glass-input" 
+                           value="@Model.RaportFrom?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field">
+                    <label class="field-label" for="raport-to">По</label>
+                    <input id="raport-to" name="RaportTo" type="date" 
+                           class="glass-input" 
+                           value="@Model.RaportTo?.ToString("yyyy-MM-dd")" />
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="btn btn-ok flex-1 sm:flex-none">
+                    <span>🔍 Показать за период</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Итоги по кассе -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">₽</div>
+            <div class="card-title">
+                Касса за период 
+                <span class="text-sm font-normal text-white/40">(@Model.RaportSummary.Count рапортов)</span>
+            </div>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th class="text-right">Наличные</th>
+                    <th class="text-right">Безналичные</th>
+                    <th class="text-right">Итого</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="font-medium">Факт</td>
+                    <td class="text-right">@Model.RaportSummary.FactCash.ToString("N0")</td>
+                    <td class="text-right">@Model.RaportSummary.FactNonCash.ToString("N0")</td>
+                    <td class="text-right font-semibold">@Model.RaportSummary.FactTotal.ToString("N0") ₽</td>
+                </tr>
+                <tr>
+                    <td class="font-medium">По программе</td>
+                    <td class="text-right">@Model.RaportSummary.ProgramCash.ToString("N0")</td>
+                    <td class="text-right">@Model.RaportSummary.ProgramNonCash.ToString("N0")</td>
+                    <td class="text-right font-semibold">@Model.RaportSummary.ProgramTotal.ToString("N0") ₽</td>
+                </tr>
+                <tr class="border-t-2 border-white/10">
+                    <td class="font-medium">Разница</td>
+                    <td class="text-right @(Model.RaportSummary.DiffCash < 0 ? "neg" : "pos")">@Model.RaportSummary.DiffCash.ToString("N0")</td>
+                    <td class="text-right @(Model.RaportSummary.DiffNonCash < 0 ? "neg" : "pos")">@Model.RaportSummary.DiffNonCash.ToString("N0")</td>
+                    <td class="text-right font-semibold @(Model.RaportSummary.DiffTotal < 0 ? "neg" : "pos")">@Model.RaportSummary.DiffTotal.ToString("N0") ₽</td>
+                </tr>
+                <tr>
+                    <td class="font-medium">В сейфе (факт)</td>
+                    <td colspan="3" class="text-right font-semibold">@Model.RaportSummary.FactSafe.ToString("N0") ₽</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Расходы и прибыль -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon">📊</div>
+            <div class="card-title">Расходы и приблизительная прибыль</div>
+        </div>
+
+        <table class="data-table" id="expenses-table" data-revenue="@Model.RaportSummary.FactTotal">
+            <thead>
+                <tr>
+                    <th>Статья расхода</th>
+                    <th class="w-40">Значение</th>
+                    <th class="text-right">Сумма</th>
+                    <th class="w-12"></th>
+                </tr>
+            </thead>
+            <tbody id="expenses-body"></tbody>
+            <tfoot class="font-medium">
+                <tr class="border-t-2 border-white/10">
+                    <td><b>Выручка (факт)</b></td>
+                    <td></td>
+                    <td id="expenses-revenue" class="text-right"><b>@Model.RaportSummary.FactTotal.ToString("N0") ₽</b></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td><b>Расходы, итого</b></td>
+                    <td id="expenses-total-pct" class="text-right"><b>—</b></td>
+                    <td id="expenses-total-amount" class="text-right"><b>0 ₽</b></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="text-white/60">в т.ч. наличными</td>
+                    <td></td>
+                    <td id="cash-expenses" class="text-right">0 ₽</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="text-white/60">в т.ч. безналом</td>
+                    <td></td>
+                    <td id="noncash-expenses" class="text-right">0 ₽</td>
+                    <td></td>
+                </tr>
+                <tr class="border-t border-white/10">
+                    <td><b>Прибыль (приблизительно)</b></td>
+                    <td id="profit-pct" class="text-right"><b>100%</b></td>
+                    <td id="profit-amount" class="text-right font-semibold"><b>@Model.RaportSummary.FactTotal.ToString("N0") ₽</b></td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="text-white/60">Прибыль наличными</td>
+                    <td></td>
+                    <td id="cash-profit" class="text-right font-medium">0 ₽</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td class="text-white/60">Прибыль безналом</td>
+                    <td></td>
+                    <td id="noncash-profit" class="text-right font-medium">0 ₽</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="actions">
+            <button type="button" id="add-expense-row" class="btn btn-ghost">
+                + Добавить статью расхода
+            </button>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    const table = document.getElementById('expenses-table');
+    if (!table) return;
+
+    const body = document.getElementById('expenses-body');
+    const revTotal = +table.dataset.revenue;
+    const revCash = @Model.RaportSummary.FactCash;
+    const revNonCash = @Model.RaportSummary.FactNonCash;
+
+    const fmt = n => n.toLocaleString('ru-RU') + ' ₽';
+
+    function recalc() {
+        let totalExp = 0, cashExp = 0, noncashExp = 0;
+
+        body.querySelectorAll('tr.expense-row').forEach(row => {
+            const mode = row.querySelector('.expense-mode').value;
+            const val = parseFloat(row.querySelector('.expense-val').value) || 0;
+            const base = row.querySelector('.expense-base').value;
+
+            let amount = mode === 'abs' ? val : 
+                ((base === 'cash' ? revCash : base === 'noncash' ? revNonCash : revTotal) * val / 100);
+
+            row.querySelector('.expense-amount').textContent = fmt(Math.round(amount));
+            totalExp += amount;
+
+            if (base === 'cash') cashExp += amount;
+            else if (base === 'noncash') noncashExp += amount;
+            else {
+                const cashRatio = revTotal ? revCash / revTotal : 0.5;
+                cashExp += amount * cashRatio;
+                noncashExp += amount * (1 - cashRatio);
+            }
+        });
+
+        const totalProfit = revTotal - totalExp;
+        const cashProfit = revCash - cashExp;
+        const noncashProfit = revNonCash - noncashExp;
+
+        document.getElementById('expenses-total-amount').innerHTML = `<b>${fmt(Math.round(totalExp))}</b>`;
+        document.getElementById('profit-amount').innerHTML = `<b>${fmt(Math.round(totalProfit))}</b>`;
+        document.getElementById('profit-pct').innerHTML = `<b>${revTotal ? Math.round(totalProfit / revTotal * 100) : 100}%</b>`;
+
+        document.getElementById('cash-expenses').textContent = fmt(Math.round(cashExp));
+        document.getElementById('noncash-expenses').textContent = fmt(Math.round(noncashExp));
+        document.getElementById('cash-profit').innerHTML = `<b>${fmt(Math.round(cashProfit))}</b>`;
+        document.getElementById('noncash-profit').innerHTML = `<b>${fmt(Math.round(noncashProfit))}</b>`;
+    }
+
+    function addRow(name = '', value = '', type = 'pct', base = 'total') {
+        const row = document.createElement('tr');
+        row.className = 'expense-row';
+
+        row.innerHTML = `
+            <td><input type="text" class="glass-input expense-name" value="${name}" placeholder="Название статьи"></td>
+            <td class="expense-controls">
+                <select class="glass-input expense-mode">
+                    <option value="pct" ${type==='pct'?'selected':''}>%</option>
+                    <option value="abs" ${type==='abs'?'selected':''}>₽</option>
+                </select>
+                <input type="number" class="glass-input expense-val" value="${value}" style="width:92px">
+                <select class="glass-input expense-base">
+                    <option value="total" ${base==='total'?'selected':''}>Общ.</option>
+                    <option value="cash" ${base==='cash'?'selected':''}>Нал</option>
+                    <option value="noncash" ${base==='noncash'?'selected':''}>Б/Н</option>
+                </select>
+            </td>
+            <td class="expense-amount text-right font-medium">${fmt(0)}</td>
+            <td><button type="button" class="btn btn-ghost text-red-400 hover:text-red-300 px-2">✕</button></td>
+        `;
+
+        const inputs = row.querySelectorAll('input, select');
+        inputs.forEach(el => el.addEventListener('input', recalc));
+
+        row.querySelector('button').addEventListener('click', () => {
+            row.remove();
+            recalc();
+        });
+
+        body.appendChild(row);
+        recalc();
+    }
+
+    // Кнопка добавления
+    document.getElementById('add-expense-row').addEventListener('click', () => addRow());
+
+    // Дефолтные строки
+    addRow('Налог', '7', 'pct', 'noncash');
+    addRow('Зарплата', '171800', 'abs', 'cash');
+    addRow('Коммуналка', '15000', 'abs', 'noncach');
+    addRow('Аренда', '80000', 'abs', 'noncach');
+    addRow('ПО', '18000', 'abs', 'noncach');
+
+    // Авторасчёт при загрузке
+    setTimeout(recalc, 10);
+})();
+</script>

@@ -97,6 +97,10 @@ public partial class IndexModel(
         _logger.LogInformation("[Index] OnGetAsync start, Tab={Tab}", Tab);
         await LoadEmployeesAsync(ct);
         _logger.LogInformation("[Index] OnGetAsync complete in {Ms}ms", sw.ElapsedMilliseconds);
+        if (Tab == "raports")
+    {
+        await LoadRaportsTabAsync(ct);
+    }
     }
 
     public IActionResult OnPostLogout()
