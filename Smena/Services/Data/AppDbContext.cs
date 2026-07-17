@@ -1,10 +1,20 @@
 using Host.Services.Data.Entities;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Host.Services.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options)
+    : DbContext(options), IDataProtectionKeyContext
 {
+    /// <summary>
+    /// Ключи Data Protection (antiforgery-куки панели). Хранятся в БД, а не в
+    /// файловой системе контейнера: в swarm контейнер пересоздаётся, и ключи
+    /// терялись — старые куки переставали расшифровываться.
+    /// </summary>
+    public DbSet<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey> DataProtectionKeys
+        => Set<Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey>();
+
     public DbSet<EmployeeEntity> Employees => Set<EmployeeEntity>();
     public DbSet<TelegramAccountEntity> TelegramAccounts => Set<TelegramAccountEntity>();
     public DbSet<SalaryOperationEntity> SalaryOperations => Set<SalaryOperationEntity>();

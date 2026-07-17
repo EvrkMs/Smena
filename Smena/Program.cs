@@ -3,6 +3,7 @@ using Host.GrpcInterceptor;
 using Host.Services;
 using Host.Services.Data;
 using Host.Services.RootPanel;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +30,15 @@ builder.WebHost.UseKestrel(opt =>
         optListner.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1;
     });
 });
+
+// Ключи Data Protection (ими шифруются antiforgery-куки панели) — в Postgres.
+// По умолчанию key ring живёт в файловой системе контейнера: swarm пересоздаёт
+// контейнер, ключи теряются, и старые куки перестают расшифровываться
+// ("The key {...} was not found in the key ring"). БД одна на все реплики,
+// генерация и ротация ключей остаются полностью автоматическими.
+builder.Services.AddDataProtection()
+    .SetApplicationName("Smena")
+    .PersistKeysToDbContext<AppDbContext>();
 
 // Add services to the container.
 builder.Services.AddGrpc(options =>
