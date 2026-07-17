@@ -70,6 +70,7 @@ app.UseStaticFiles();
 app.UseMiddleware<RootPanelAuthMiddleware>();
 
 // Configure the HTTP request pipeline.
+app.MapGrpcService<GrpcConstantsService>();
 app.MapGrpcService<GrpcEmployeeService>();
 app.MapGrpcService<GrpcSafeService>();
 app.MapGrpcService<GrpcExpenseService>();

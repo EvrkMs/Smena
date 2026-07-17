@@ -14,6 +14,9 @@ public static class RootPanelServiceCollectionExtensions
         services.Configure<RootPanelLoginRateLimitOptions>(
             configuration.GetSection(RootPanelLoginRateLimitOptions.SectionName));
 
+        // Хранилище токенов живёт поверх IMemoryCache (TTL-очистку делает кэш).
+        services.AddMemoryCache();
+
         services.AddSingleton<IPasswordHasher<RootPanelUserEntity>, PasswordHasher<RootPanelUserEntity>>();
         services.AddSingleton<IRootPanelLoginRateLimiter, InMemoryRootPanelLoginRateLimiter>();
         services.AddSingleton<IRootPanelPasswordService, RootPanelPasswordService>();

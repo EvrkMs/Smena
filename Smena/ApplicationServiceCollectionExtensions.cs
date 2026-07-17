@@ -30,6 +30,8 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddSingleton<SafeUpdatesNotifier>();
         services.AddSingleton<PhotoSessionStore>();
         services.AddHostedService<PhotoSessionCleanupService>();
+        // Ежемесячная финализация журналов сейфа/ЗП (см. LedgerCompactionService).
+        services.AddHostedService<LedgerCompactionService>();
         services.AddSingleton<ITelegramScopeAccessor, TelegramScopeAccessor>();
 
         // Один общий bot-клиент и один потребитель getUpdates на всё приложение.

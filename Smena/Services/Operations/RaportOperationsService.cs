@@ -16,8 +16,6 @@ public class RaportOperationsService(
     SafeOperationsService safeOperationsService,
     NonCashOperationsService nonCashOperationsService)
 {
-    private const int InitialCash = 1000;
-
     private readonly AppDbContext _db = db;
     private readonly TelegramService _telegramService = telegramService;
     private readonly PhotoSessionStore _photoSessionStore = photoSessionStore;
@@ -151,14 +149,14 @@ public class RaportOperationsService(
             return OperationResult.Fail("Не выбраны сотрудники.");
         }
 
-        if (input.Employees.Count > 3)
+        if (input.Employees.Count > ShiftRules.MaxEmployeesPerShift)
         {
-            return OperationResult.Fail("Максимум 3 сотрудника.");
+            return OperationResult.Fail($"Максимум {ShiftRules.MaxEmployeesPerShift} сотрудника.");
         }
 
-        if (input.Employees.Sum(e => e.Hours) > 12)
+        if (input.Employees.Sum(e => e.Hours) > ShiftRules.MaxHoursPerShift)
         {
-            return OperationResult.Fail("Суммарно больше 12 часов.");
+            return OperationResult.Fail($"Суммарно больше {ShiftRules.MaxHoursPerShift} часов.");
         }
 
         if (input.Employees.Any(e => e.EmployeeId == Guid.Empty))
@@ -187,7 +185,7 @@ public class RaportOperationsService(
     {
         var cashDelta = (input.FactCash + input.FactNonCash)
                         - (input.ProgramCash + input.ProgramNonCash);
-        var cashNet = input.FactCash - InitialCash;
+        var cashNet = input.FactCash - ShiftRules.InitialCashRegister;
         var safeDelta = input.FactSafe - currentSafe;
         var totalMinusExpected = (cashDelta < 0 ? -cashDelta : 0) + (safeDelta < 0 ? -safeDelta : 0);
 
