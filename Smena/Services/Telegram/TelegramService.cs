@@ -12,6 +12,7 @@ namespace Host.Services.Telegram;
 
 public class TelegramService(
     IOptions<TelegramOptions> options,
+    TelegramBotClientFactory clientFactory,
     AppDbContext db,
     ILogger<TelegramMessageScope> scopeLogger,
     ILogger<TelegramService> logger)
@@ -19,11 +20,10 @@ public class TelegramService(
     private const int RetryAttempts = 4;
 
     private readonly TelegramOptions _options = options.Value;
+    private readonly TelegramBotClientFactory _clientFactory = clientFactory;
     private readonly AppDbContext _db = db;
     private readonly ILogger<TelegramMessageScope> _scopeLogger = scopeLogger;
     private readonly ILogger<TelegramService> _logger = logger;
-    private static ITelegramBotClient? s_sharedBotClient;
-    private static readonly object s_clientLock = new();
 
     public TelegramMessageScope CreateScope() => new(GetClientOrThrow(), _scopeLogger);
 
@@ -239,41 +239,7 @@ public class TelegramService(
         }
     }
 
-    public ITelegramBotClient GetClientOrThrow()
-    {
-        if (s_sharedBotClient != null)
-            return s_sharedBotClient;
-
-        lock (s_clientLock)
-        {
-            if (s_sharedBotClient != null)
-                return s_sharedBotClient;
-
-            if (string.IsNullOrWhiteSpace(_options.Token))
-                throw new InvalidOperationException("Telegram token is not configured.");
-
-            var handler = new SocketsHttpHandler
-            {
-                ConnectTimeout = TimeSpan.FromSeconds(_options.ConnectTimeoutSeconds),
-                PooledConnectionLifetime = TimeSpan.FromMinutes(15)
-            };
-
-            if (!string.IsNullOrWhiteSpace(_options.ProxyUri))
-            {
-                handler.Proxy = new System.Net.WebProxy(_options.ProxyUri);
-                handler.UseProxy = true;
-                _logger.LogInformation("Telegram: using proxy {ProxyUri}", _options.ProxyUri);
-            }
-
-            var httpClient = new HttpClient(handler)
-            {
-                Timeout = TimeSpan.FromSeconds(_options.HttpTimeoutSeconds)
-            };
-
-            s_sharedBotClient = new TelegramBotClient(_options.Token, httpClient);
-            return s_sharedBotClient;
-        }
-    }
+    public ITelegramBotClient GetClientOrThrow() => _clientFactory.GetClientOrThrow();
 
     private static DateTimeOffset BusinessNow()
     {
@@ -336,9 +302,22 @@ public class TelegramService(
             return false;
         }
 
+        // Ответ от API получен — значит, запрос до Telegram ДОШЁЛ. Повторять
+        // безопасно только 429 (rate limit: запрос не был обработан). Остальные
+        // Api-ошибки постоянны, а повтор после 5xx-ответа создавал ДУБЛЬ
+        // сообщения: id первой попытки не попадал в scope, и при откате
+        // транзакции фантомное сообщение оставалось в чате.
+        if (ex is ApiRequestException apiEx)
+        {
+            return apiEx.ErrorCode == 429;
+        }
+
+        // RequestException без inner — это обёртка ответа (в т.ч. 5xx), запрос
+        // мог быть обработан: не ретраим (раньше здесь было `InnerException == null
+        // || ...`, из-за чего ретраились и 4xx, и 5xx).
         if (ex is RequestException requestEx)
         {
-            return requestEx.InnerException == null || IsTransient(requestEx.InnerException);
+            return requestEx.InnerException != null && IsTransient(requestEx.InnerException);
         }
 
         if (ex is HttpRequestException httpEx)
