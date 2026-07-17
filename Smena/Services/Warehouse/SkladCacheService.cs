@@ -97,6 +97,9 @@ public sealed class SkladCacheService : BackgroundService
             const int pageSize = 1000;
 
             // ── 1. Остатки из отчёта (есть только у товаров с историей движений) ──
+            // Строки сохраняем целиком: они же используются в fallback ниже,
+            // если ассортимент недоступен — без повторной выкачки.
+            var stockRows = new List<MoySkladStockRow>();
             var stockMap = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             {
                 var offset = 0;
@@ -110,6 +113,7 @@ public sealed class SkladCacheService : BackgroundService
                         await resp.Content.ReadAsStreamAsync(ct), _json, ct);
 
                     if (data?.Rows is null || data.Rows.Count == 0) break;
+                    stockRows.AddRange(data.Rows);
                     foreach (var r in data.Rows)
                         stockMap[StockKey(r.Name, r.Article)] = r.Stock;
 
@@ -164,29 +168,16 @@ public sealed class SkladCacheService : BackgroundService
                 }
             }
 
-            // Если ассортимент не вернул ничего (нет прав / ошибка) — фолбэк на stock-данные
-            if (all.Count == 0 && stockMap.Count > 0)
+            // Если ассортимент не вернул ничего (нет прав / ошибка) — фолбэк на
+            // строки stock/all из шага 1, БЕЗ повторной выкачки: раньше здесь
+            // весь отчёт скачивался второй раз ровно тогда, когда API МойСклад
+            // уже нездоров (двойной удар по rate limit).
+            if (all.Count == 0 && stockRows.Count > 0)
             {
                 _logger.LogWarning("[SkladCache] Assortment empty, falling back to stock/all data");
-                // (повторный запрос не нужен — stockMap уже заполнен, но нет папок/артикулов)
-                // Пересоздаём из отчёта
-                using var scope2 = _scopeFactory.CreateScope();
-                var client2      = scope2.ServiceProvider.GetRequiredService<SkladHttpClient>();
-                var offset2      = 0;
-                while (true)
-                {
-                    var url  = $"{baseUrl}/report/stock/all?limit={pageSize}&offset={offset2}&stockMode=all";
-                    var resp = await client2.GetAsync(url, ct);
-                    if (!resp.IsSuccessStatusCode) break;
-                    var data = await JsonSerializer.DeserializeAsync<MoySkladStockResponse>(
-                        await resp.Content.ReadAsStreamAsync(ct), _json, ct);
-                    if (data?.Rows is null || data.Rows.Count == 0) break;
-                    foreach (var r in data.Rows)
-                        all.Add(new SkladCacheItem { Name = r.Name, Article = r.Article, Code = r.Code,
-                            Folder = r.Folder?.PathName ?? r.Folder?.Name, Stock = r.Stock });
-                    if (data.Rows.Count < pageSize) break;
-                    offset2 += pageSize;
-                }
+                foreach (var r in stockRows)
+                    all.Add(new SkladCacheItem { Name = r.Name, Article = r.Article, Code = r.Code,
+                        Folder = r.Folder?.PathName ?? r.Folder?.Name, Stock = r.Stock });
             }
 
             all.Sort((a, b) =>

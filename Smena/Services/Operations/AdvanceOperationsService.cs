@@ -16,6 +16,10 @@ public class AdvanceOperationsService(
     private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
     private readonly NonCashOperationsService _nonCashOperationsService = nonCashOperationsService;
 
+    /// <param name="skipBalanceCheck">
+    /// true ТОЛЬКО для принудительных выплат из root-панели: лимит «не больше
+    /// текущей ЗП» не проверяется, баланс сотрудника может уйти в минус.
+    /// </param>
     public async Task<OperationResult> SendAdvanceAsync(
         Guid employeeId,
         int amount,
@@ -24,7 +28,8 @@ public class AdvanceOperationsService(
         bool extractFromSafe,
         bool isNonCash,
         TelegramMessageScope scope,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool skipBalanceCheck = false)
     {
         if (amount <= 0)
         {
@@ -60,16 +65,19 @@ public class AdvanceOperationsService(
             // Проверка лимита — ВНУТРИ транзакции и под блокировкой: раньше два
             // конкурентных вызова (ретрай сети, второй терминал) читали ЗП до
             // транзакции, оба проходили проверку и выплачивали сумму дважды.
-            var currentSalary = await _salaryOperationsService.GetCurrentSalaryAsync(employeeId, ct);
-
-            if (currentSalary <= 0)
+            if (!skipBalanceCheck)
             {
-                return OperationResult.Fail("У сотрудника нет доступной ЗП для выплаты.");
-            }
+                var currentSalary = await _salaryOperationsService.GetCurrentSalaryAsync(employeeId, ct);
 
-            if (amount > currentSalary)
-            {
-                return OperationResult.Fail($"Нельзя выдать больше текущей ЗП ({currentSalary} руб.).");
+                if (currentSalary <= 0)
+                {
+                    return OperationResult.Fail("У сотрудника нет доступной ЗП для выплаты.");
+                }
+
+                if (amount > currentSalary)
+                {
+                    return OperationResult.Fail($"Нельзя выдать больше текущей ЗП ({currentSalary} руб.).");
+                }
             }
 
             var signedDelta = SignedSalaryAmount(type, amount);

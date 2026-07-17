@@ -13,21 +13,18 @@ public partial class IndexModel(
     AppDbContext db,
     TelegramService telegramService,
     SalaryOperationsService salaryOperationsService,
-    SafeOperationsService safeOperationsService,
-    SafeUpdatesNotifier safeUpdatesNotifier,
+    AdvanceOperationsService advanceOperationsService,
+    InventoryOperationsService inventoryOperationsService,
     IRootPanelAuthService authService,
-    IConfiguration configuration,
     ILogger<IndexModel> logger) : PageModel
 {
     private readonly AppDbContext _db = db;
     private readonly TelegramService _telegramService = telegramService;
     private readonly SalaryOperationsService _salaryOperationsService = salaryOperationsService;
-    private readonly SafeOperationsService _safeOperationsService = safeOperationsService;
-    private readonly SafeUpdatesNotifier _safeUpdatesNotifier = safeUpdatesNotifier;
+    private readonly AdvanceOperationsService _advanceOperationsService = advanceOperationsService;
+    private readonly InventoryOperationsService _inventoryOperationsService = inventoryOperationsService;
     private readonly IRootPanelAuthService _authService = authService;
     private readonly ILogger<IndexModel> _logger = logger;
-    private readonly TimeSpan _businessUtcOffset = TimeSpan.FromHours(
-        configuration.GetValue<int?>("RootPanel:TimeZoneOffsetHours") ?? 3);
 
     public sealed record EmployeeSnapshot(
         Guid Id,

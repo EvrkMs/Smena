@@ -1,7 +1,4 @@
-using Host.Services.Data;
-using Host.Services.Data.Entities;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Host.Pages.Root;
 
@@ -21,62 +18,36 @@ public partial class IndexModel
             return RedirectToPage(new { tab = "force" });
         }
 
-        var employee = await _db.Employees
-            .AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+        var comment = string.IsNullOrWhiteSpace(Force.Comment)
+            ? (Force.IsSalary ? "ROOT: принудительная выплата зарплаты" : "ROOT: принудительный аванс")
+            : $"ROOT: {Force.Comment}";
 
-        if (employee == null)
-        {
-            ErrorMessage = "Сотрудник не найден.";
-            return RedirectToPage(new { tab = "force" });
-        }
-
+        // Вся денежная логика — в AdvanceOperationsService (раньше handler
+        // дублировал её и расходился с gRPC-потоком). skipBalanceCheck: true —
+        // root-выплата сознательно может увести ЗП в минус. Публикацию сейфа
+        // после коммита сервис делает сам.
         var scope = _telegramService.CreateScope();
         try
         {
-            int? updatedSafe = null;
-            await TransactionHelper.ExecuteAsync(_db, async () =>
+            var result = await _advanceOperationsService.SendAdvanceAsync(
+                employeeId,
+                Force.Amount,
+                Force.IsSalary,
+                comment,
+                extractFromSafe: !Force.IsNonCash,
+                isNonCash: Force.IsNonCash,
+                scope,
+                ct,
+                skipBalanceCheck: true);
+
+            if (result.Success)
             {
-                var type = Force.IsSalary ? SalaryOperationType.Pay : SalaryOperationType.Advance;
-                var comment = string.IsNullOrWhiteSpace(Force.Comment)
-                    ? (Force.IsSalary ? "ROOT: принудительная выплата зарплаты" : "ROOT: принудительный аванс")
-                    : $"ROOT: {Force.Comment}";
-
-                await _salaryOperationsService.ApplySalaryOperationAsync(
-                    employeeId,
-                    -Force.Amount,
-                    type,
-                    comment,
-                    scope,
-                    ct);
-
-                if (Force.IsNonCash)
-                {
-                    _db.NonCashOperations.Add(new NonCashOperationEntity
-                    {
-                        Amount = Force.Amount,
-                        Type = NonCashOperationType.Expense,
-                        Comment = $"{employee.Name}: {comment}"
-                    });
-                }
-                else
-                {
-                    updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
-                        -Force.Amount,
-                        $"{employee.Name}: {comment}",
-                        scope,
-                        ct);
-                }
-
-                await _db.SaveChangesAsync(ct);
-            }, ct);
-
-            if (updatedSafe.HasValue)
-            {
-                _safeUpdatesNotifier.Publish(updatedSafe.Value);
+                StatusMessage = "Принудительная выплата применена.";
             }
-
-            StatusMessage = "Принудительная выплата применена.";
+            else
+            {
+                ErrorMessage = result.Message;
+            }
         }
         catch (Exception ex)
         {

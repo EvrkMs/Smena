@@ -241,11 +241,8 @@ public class TelegramService(
 
     public ITelegramBotClient GetClientOrThrow() => _clientFactory.GetClientOrThrow();
 
-    private static DateTimeOffset BusinessNow()
-    {
-        // Moscow time (UTC+3) — matches business timezone for Telegram messages.
-        return DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(3));
-    }
+    // Бизнес-таймзона единая для всего приложения — env TZ (см. BusinessTime).
+    private static DateTimeOffset BusinessNow() => BusinessTime.Now;
 
     public Task<T> ExecuteWithRetryAsync<T>(
         Func<ITelegramBotClient, CancellationToken, Task<T>> action,
