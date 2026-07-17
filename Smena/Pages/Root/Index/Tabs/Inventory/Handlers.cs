@@ -10,11 +10,19 @@ public partial class IndexModel
 {
     public async Task<IActionResult> OnPostInventoryAsync(CancellationToken ct)
     {
-        var ids = Inventory.EmployeeIds
-            .Select(x => Guid.TryParse(x, out var id) ? id : Guid.Empty)
-            .Where(x => x != Guid.Empty)
-            .Distinct()
-            .ToList();
+        // Битые id отклоняем целиком — молчаливый отброс перекладывал их долю
+        // недостачи на остальных сотрудников.
+        var ids = new List<Guid>();
+        foreach (var raw in Inventory.EmployeeIds)
+        {
+            if (!Guid.TryParse(raw, out var id) || id == Guid.Empty)
+            {
+                ErrorMessage = "Некорректный сотрудник в списке.";
+                return RedirectToPage(BuildInventoryRouteValues());
+            }
+
+            ids.Add(id);
+        }
 
         if (Inventory.TotalAmount <= 0)
         {
@@ -28,50 +36,27 @@ public partial class IndexModel
             return RedirectToPage(BuildInventoryRouteValues());
         }
 
-        var employees = await _db.Employees
-            .AsNoTracking()
-            .Where(e => ids.Contains(e.Id))
-            .OrderBy(e => e.Name)
-            .ToListAsync(ct);
-
-        if (employees.Count == 0)
-        {
-            ErrorMessage = "Сотрудники не найдены.";
-            return RedirectToPage(BuildInventoryRouteValues());
-        }
-
-        var perEmployee = Inventory.TotalAmount / employees.Count;
-        var remainder = Inventory.TotalAmount % employees.Count;
         var comment = string.IsNullOrWhiteSpace(Inventory.Comment)
             ? "ROOT: операция инвентаризации"
             : $"ROOT: {Inventory.Comment}";
 
+        // Деление суммы, валидации и блокировки — в InventoryOperationsService
+        // (раньше handler дублировал алгоритм почти построчно и мог разъехаться
+        // с gRPC-потоком).
         var scope = _telegramService.CreateScope();
         try
         {
-            await TransactionHelper.ExecuteAsync(_db, async () =>
+            var result = await _inventoryOperationsService.SendInventoryAsync(
+                Inventory.TotalAmount, ids, comment, scope, ct);
+
+            if (result.Success)
             {
-                foreach (var employee in employees)
-                {
-                    var amount = perEmployee + (remainder > 0 ? 1 : 0);
-                    if (remainder > 0)
-                    {
-                        remainder--;
-                    }
-
-                    await _salaryOperationsService.ApplySalaryOperationAsync(
-                        employee.Id,
-                        -amount,
-                        SalaryOperationType.Inventory,
-                        comment,
-                        scope,
-                        ct);
-                }
-
-                await _db.SaveChangesAsync(ct);
-            }, ct);
-
-            StatusMessage = "Инвентаризация применена.";
+                StatusMessage = "Инвентаризация применена.";
+            }
+            else
+            {
+                ErrorMessage = result.Message;
+            }
         }
         catch (Exception ex)
         {
@@ -196,7 +181,8 @@ public partial class IndexModel
 
         if (dateTime.Kind == DateTimeKind.Unspecified)
         {
-            return new DateTimeOffset(dateTime, _businessUtcOffset).UtcDateTime;
+            // Unspecified = ввод из datetime-local, трактуем в бизнес-таймзоне (env TZ).
+            return Host.Services.BusinessTime.ToUtc(dateTime);
         }
 
         return dateTime.ToUniversalTime();

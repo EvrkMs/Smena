@@ -1,31 +1,33 @@
 using Host.Services.Data;
-using Host.Services.Photo;
 using Host.Services.Telegram;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Telegram.Bot;
-using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types;
 
 namespace Host.Services.Photo;
 
 public class TelegramPhotoRequestService(
     TelegramService telegramService,
+    TelegramUpdatesPoller updatesPoller,
     AppDbContext db,
     PhotoSessionStore sessionStore,
-    TelegramUpdateOffsetStore offsetStore,
     IOptions<PhotoOptions> options,
     ILogger<TelegramPhotoRequestService> logger)
 {
+    private static readonly TimeSpan AlbumWindow = TimeSpan.FromSeconds(2);
+    private const int MaxPhotos = 10;
+
     private readonly TelegramService _telegramService = telegramService;
+    private readonly TelegramUpdatesPoller _updatesPoller = updatesPoller;
     private readonly AppDbContext _db = db;
     private readonly PhotoSessionStore _sessionStore = sessionStore;
-    private readonly TelegramUpdateOffsetStore _offsetStore = offsetStore;
     private readonly PhotoOptions _options = options.Value;
     private readonly ILogger<TelegramPhotoRequestService> _logger = logger;
 
     public async Task<(bool Success, string Message, string? SessionKey)> RequestPhotosAsync(
         Guid employeeId,
-        Func<string, Task>? progress,
+        Func<PhotoProgress, Task>? progress,
         CancellationToken ct)
     {
         var timeout = TimeSpan.FromSeconds(_options.RequestTimeoutSeconds);
@@ -42,16 +44,26 @@ public class TelegramPhotoRequestService(
             return (false, "Telegram account not found.", null);
         }
 
+        var telegramId = employee.TelegramAccount.TelegramId;
+
         if (progress != null)
         {
-            await progress("Start");
+            await progress(new PhotoProgress(PhotoProgressStage.Start));
         }
+
+        // Подписка — ДО отправки запроса сотруднику, чтобы фото, отправленное
+        // мгновенно, не проскочило мимо. Свой getUpdates-цикл здесь больше не
+        // крутится: апдейты раздаёт общий TelegramUpdatesPoller.
+        using var subscription = _updatesPoller.Subscribe(update =>
+            update.Message is { Photo: not null } message && message.Chat.Id == telegramId);
+
+        var requestTime = DateTime.UtcNow;
 
         try
         {
             await _telegramService.ExecuteWithRetryAsync(
                 (bot, token) => bot.SendMessage(
-                    employee.TelegramAccount.TelegramId,
+                    telegramId,
                     "Ожидаю фото...",
                     cancellationToken: token),
                 operationCt);
@@ -66,83 +78,72 @@ public class TelegramPhotoRequestService(
                 ex,
                 "Failed to send photo request message to Telegram for employeeId={EmployeeId} telegramId={TelegramId}",
                 employee.Id,
-                employee.TelegramAccount.TelegramId);
+                telegramId);
             return (false, $"Не удалось отправить сообщение в Telegram: {ex.Message}", null);
         }
 
         if (progress != null)
         {
-            await progress("Request sent");
+            await progress(new PhotoProgress(PhotoProgressStage.RequestSent));
         }
 
-        var requestTime = DateTime.UtcNow;
-        var albumWindow = TimeSpan.FromSeconds(2);
+        var deadline = requestTime + timeout;
         var fileIds = new List<string>();
         string? mediaGroupId = null;
-        DateTime? lastPhotoAt = null;
 
-        while (DateTime.UtcNow - requestTime < timeout)
+        while (true)
         {
-            operationCt.ThrowIfCancellationRequested();
-
-            var updates = await _telegramService.ExecuteWithRetryAsync(
-                (bot, token) => bot.GetUpdates(
-                    offset: _offsetStore.GetOffset(),
-                    timeout: 1,
-                    cancellationToken: token),
-                operationCt);
-
-            if (updates.Length > 0)
+            // До первого фото ждём вплоть до дедлайна; после — окно альбома 2 с
+            // (каждое новое фото продлевает его), но не дольше дедлайна.
+            var remaining = deadline - DateTime.UtcNow;
+            if (fileIds.Count > 0 && AlbumWindow < remaining)
             {
-                _offsetStore.AdvanceOffset(updates.Max(u => u.Id) + 1);
+                remaining = AlbumWindow;
             }
 
-            foreach (var update in updates)
-            {
-                if (update.Type != UpdateType.Message)
-                {
-                    continue;
-                }
-
-                var message = update.Message;
-                if (message?.Photo == null || message.Chat.Id != employee.TelegramAccount.TelegramId)
-                {
-                    continue;
-                }
-
-                if (message.Date.ToUniversalTime() <= requestTime)
-                {
-                    continue;
-                }
-
-                mediaGroupId ??= message.MediaGroupId ?? "single";
-                if (message.MediaGroupId != null && message.MediaGroupId != mediaGroupId)
-                {
-                    continue;
-                }
-
-                if (fileIds.Count >= 10)
-                {
-                    continue;
-                }
-
-                var fileId = message.Photo.Last().FileId;
-                if (!fileIds.Contains(fileId))
-                {
-                    fileIds.Add(fileId);
-                    if (progress != null)
-                    {
-                        await progress($"Received {fileIds.Count} photos");
-                    }
-                }
-
-                lastPhotoAt = DateTime.UtcNow;
-            }
-
-            if (fileIds.Count > 0 && lastPhotoAt.HasValue &&
-                DateTime.UtcNow - lastPhotoAt.Value > albumWindow)
+            if (remaining <= TimeSpan.Zero)
             {
                 break;
+            }
+
+            Update update;
+            try
+            {
+                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                readCts.CancelAfter(remaining);
+                update = await subscription.Reader.ReadAsync(readCts.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Общий таймаут либо закрылось окно альбома.
+                break;
+            }
+
+            var message = update.Message!;
+            if (message.Date.ToUniversalTime() <= requestTime)
+            {
+                continue;
+            }
+
+            mediaGroupId ??= message.MediaGroupId ?? "single";
+            if (message.MediaGroupId != null && message.MediaGroupId != mediaGroupId)
+            {
+                continue;
+            }
+
+            if (fileIds.Count >= MaxPhotos)
+            {
+                continue;
+            }
+
+            var fileId = message.Photo!.Last().FileId;
+            if (!fileIds.Contains(fileId))
+            {
+                fileIds.Add(fileId);
+                if (progress != null)
+                {
+                    await progress(new PhotoProgress(PhotoProgressStage.PhotosReceived, fileIds.Count));
+                }
             }
         }
 

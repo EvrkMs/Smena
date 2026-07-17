@@ -30,8 +30,12 @@ internal static class ApplicationServiceCollectionExtensions
         services.AddSingleton<SafeUpdatesNotifier>();
         services.AddSingleton<PhotoSessionStore>();
         services.AddHostedService<PhotoSessionCleanupService>();
-        services.AddSingleton<TelegramUpdateOffsetStore>();
         services.AddSingleton<ITelegramScopeAccessor, TelegramScopeAccessor>();
+
+        // Один общий bot-клиент и один потребитель getUpdates на всё приложение.
+        services.AddSingleton<TelegramBotClientFactory>();
+        services.AddSingleton<TelegramUpdatesPoller>();
+        services.AddHostedService(sp => sp.GetRequiredService<TelegramUpdatesPoller>());
 
         services.AddScoped<TelegramService>();
         services.AddScoped<TelegramPhotoRequestService>();

@@ -58,34 +58,27 @@ public class GrpcSendPhotoService(
             return;
         }
 
-        async Task HandleProgress(string message)
+        // Прогресс типизирован (PhotoProgress) — раньше сюда приходили строки
+        // вида "Received 3 photos", которые парсились Split-ом обратно в oneof.
+        async Task HandleProgress(PhotoProgress progress)
         {
-            if (message.StartsWith("Received", StringComparison.OrdinalIgnoreCase))
+            var update = progress.Stage switch
             {
-                var parts = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 2 && int.TryParse(parts[1], out var count))
+                PhotoProgressStage.Start => new PhotoStatusUpdate
                 {
-                    await TryWriteAsync(new PhotoStatusUpdate
-                    {
-                        PhotosReceived = new PhotosReceived { ReceivedCount = count }
-                    });
-                    return;
+                    Start = new PhotoStart { Message = "Start" }
+                },
+                PhotoProgressStage.PhotosReceived => new PhotoStatusUpdate
+                {
+                    PhotosReceived = new PhotosReceived { ReceivedCount = progress.ReceivedCount }
+                },
+                _ => new PhotoStatusUpdate
+                {
+                    RequestSent = new PhotoRequestSent { Message = "Request sent" }
                 }
-            }
+            };
 
-            if (message == "Start")
-            {
-                await TryWriteAsync(new PhotoStatusUpdate
-                {
-                    Start = new PhotoStart { Message = message }
-                });
-                return;
-            }
-
-            await TryWriteAsync(new PhotoStatusUpdate
-            {
-                RequestSent = new PhotoRequestSent { Message = message }
-            });
+            await TryWriteAsync(update);
         }
 
         try

@@ -60,6 +60,11 @@ public partial class IndexModel
         {
             await TransactionHelper.ExecuteAsync(_db, async () =>
             {
+                // Тот же advisory-lock, что и в остальных операциях по ЗП: ручная
+                // корректировка не должна проскакивать между проверкой лимита и
+                // списанием в конкурентной выдаче аванса.
+                await AdvisoryLocks.AcquireEmployeeSalaryAsync(_db, employeeId, ct);
+
                 await _salaryOperationsService.ApplySalaryOperationAsync(
                     employeeId,
                     signedAmount,

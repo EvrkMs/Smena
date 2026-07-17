@@ -16,11 +16,18 @@ public class GrpcInventoryService(
 
     public override async Task<BoolResponse> SendInventory(GrpcInventoryRequest request, ServerCallContext context)
     {
-        var employeeIds = request.EmployeeIds
-            .Select(id => Guid.TryParse(id, out var guid) ? guid : Guid.Empty)
-            .Where(id => id != Guid.Empty)
-            .Distinct()
-            .ToList();
+        // Битые id отклоняем целиком: раньше они молча отбрасывались, и сумма
+        // делилась между «выжившими» сотрудниками с ответом об успехе.
+        var employeeIds = new List<Guid>();
+        foreach (var raw in request.EmployeeIds)
+        {
+            if (!Guid.TryParse(raw, out var guid) || guid == Guid.Empty)
+            {
+                return new BoolResponse { Success = false, Message = $"Некорректный employee_id: \"{raw}\"." };
+            }
+
+            employeeIds.Add(guid);
+        }
 
         var scope = _scopeAccessor.Current
             ?? throw new InvalidOperationException("Telegram scope is not available.");
