@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.WebUtilities;
-using System.Collections.Concurrent;
+using Microsoft.Extensions.Caching.Memory;
 using System.Security.Cryptography;
 
 namespace Host.Services.RootPanel;
@@ -21,12 +21,23 @@ internal sealed record RootPanelAccessTokenState(
     DateTimeOffset ExpiresAtUtc);
 
 internal sealed record RootPanelRefreshTokenState(
-    DateTimeOffset ExpiresAtUtc);
+    DateTimeOffset ExpiresAtUtc,
+    string AccessToken);
 
-internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
+/// <summary>
+/// Токены живут в IMemoryCache с AbsoluteExpiration — истечение и очистку
+/// делает сам кэш. Раньше это был ручной ConcurrentDictionary: просроченные
+/// токены копились, пока кто-нибудь не залогинится (Issue), а чистка была
+/// O(refresh × access) — на живущей неделями refresh-сессии память текла,
+/// а редкий логин платил квадратичный скан.
+/// </summary>
+internal sealed class InMemoryRootPanelTokenStore(IMemoryCache cache) : IRootPanelTokenStore
 {
-    private readonly ConcurrentDictionary<string, RootPanelAccessTokenState> _accessTokens = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, RootPanelRefreshTokenState> _refreshTokens = new(StringComparer.Ordinal);
+    // Кэш общий на процесс — ключи токенов не должны пересечься с чужими записями.
+    private const string AccessPrefix = "rootpanel:access:";
+    private const string RefreshPrefix = "rootpanel:refresh:";
+
+    private readonly IMemoryCache _cache = cache;
 
     public RootPanelTokenPair Issue(
         Guid userId,
@@ -34,8 +45,6 @@ internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
         TimeSpan accessTokenTtl,
         TimeSpan refreshTokenTtl)
     {
-        CleanupExpiredTokens();
-
         var now = DateTimeOffset.UtcNow;
         var accessExpiresAtUtc = now.Add(accessTokenTtl);
         var refreshExpiresAtUtc = now.Add(refreshTokenTtl);
@@ -43,8 +52,15 @@ internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
         var refreshToken = CreateToken();
         var accessToken = CreateToken();
 
-        _refreshTokens[refreshToken] = new RootPanelRefreshTokenState(refreshExpiresAtUtc);
-        _accessTokens[accessToken] = new RootPanelAccessTokenState(userId, mustChangePassword, refreshToken, accessExpiresAtUtc);
+        _cache.Set(
+            AccessPrefix + accessToken,
+            new RootPanelAccessTokenState(userId, mustChangePassword, refreshToken, accessExpiresAtUtc),
+            new MemoryCacheEntryOptions { AbsoluteExpiration = accessExpiresAtUtc });
+
+        _cache.Set(
+            RefreshPrefix + refreshToken,
+            new RootPanelRefreshTokenState(refreshExpiresAtUtc, accessToken),
+            new MemoryCacheEntryOptions { AbsoluteExpiration = refreshExpiresAtUtc });
 
         return new RootPanelTokenPair(
             accessToken,
@@ -61,19 +77,13 @@ internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
             return false;
         }
 
-        if (!_accessTokens.TryGetValue(accessToken, out var state))
+        if (!_cache.TryGetValue(AccessPrefix + accessToken, out RootPanelAccessTokenState? state) || state is null)
         {
             return false;
         }
 
-        if (state.ExpiresAtUtc > DateTimeOffset.UtcNow)
-        {
-            accessTokenState = state;
-            return true;
-        }
-
-        _accessTokens.TryRemove(accessToken, out _);
-        return false;
+        accessTokenState = state;
+        return true;
     }
 
     public bool TryGetValidRefreshToken(string refreshToken, out RootPanelRefreshTokenState refreshTokenState)
@@ -84,19 +94,13 @@ internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
             return false;
         }
 
-        if (!_refreshTokens.TryGetValue(refreshToken, out var state))
+        if (!_cache.TryGetValue(RefreshPrefix + refreshToken, out RootPanelRefreshTokenState? state) || state is null)
         {
             return false;
         }
 
-        if (state.ExpiresAtUtc > DateTimeOffset.UtcNow)
-        {
-            refreshTokenState = state;
-            return true;
-        }
-
-        RevokeByRefreshToken(refreshToken);
-        return false;
+        refreshTokenState = state;
+        return true;
     }
 
     public bool MustChangePassword(string accessToken)
@@ -109,17 +113,14 @@ internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
             return;
         }
 
-        _refreshTokens.TryRemove(refreshToken, out _);
-
-        foreach (var kv in _accessTokens)
+        // Связанный access-токен хранится в состоянии refresh-а — скан всех
+        // access-записей больше не нужен.
+        if (_cache.TryGetValue(RefreshPrefix + refreshToken, out RootPanelRefreshTokenState? state) && state is not null)
         {
-            if (!string.Equals(kv.Value.RefreshToken, refreshToken, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            _accessTokens.TryRemove(kv.Key, out _);
+            _cache.Remove(AccessPrefix + state.AccessToken);
         }
+
+        _cache.Remove(RefreshPrefix + refreshToken);
     }
 
     public void RevokeAccessToken(string accessToken)
@@ -129,28 +130,7 @@ internal sealed class InMemoryRootPanelTokenStore : IRootPanelTokenStore
             return;
         }
 
-        _accessTokens.TryRemove(accessToken, out _);
-    }
-
-    private void CleanupExpiredTokens()
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        foreach (var kv in _accessTokens)
-        {
-            if (kv.Value.ExpiresAtUtc <= now)
-            {
-                _accessTokens.TryRemove(kv.Key, out _);
-            }
-        }
-
-        foreach (var kv in _refreshTokens)
-        {
-            if (kv.Value.ExpiresAtUtc <= now)
-            {
-                RevokeByRefreshToken(kv.Key);
-            }
-        }
+        _cache.Remove(AccessPrefix + accessToken);
     }
 
     private static string CreateToken()

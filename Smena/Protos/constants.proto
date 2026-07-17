@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option csharp_namespace = "Host.Grpc.Services.Constants";
+
+import "google/protobuf/empty.proto";
+
+message ShiftConstantsResponse {
+  int32 initial_cash_register = 1;
+  int32 max_employees_per_shift = 2;
+  int32 max_hours_per_shift = 3;
+  int32 max_amount_digits = 4;
+  int32 max_hours_digits = 5;
+}
+
+service GrpcConstantsService {
+  rpc GetShiftConstants(google.protobuf.Empty) returns (ShiftConstantsResponse);
+}
