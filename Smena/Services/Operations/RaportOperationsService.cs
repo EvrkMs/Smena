@@ -50,15 +50,6 @@ public class RaportOperationsService(
             return validation;
         }
 
-        var currentSafe = await _safeOperationsService.GetCurrentSafeAsync(ct);
-        var (cashDelta, cashNet, safeDelta, totalMinusExpected) = CalculateDeltas(input, currentSafe);
-
-        var totalMinusEntered = input.Employees.Sum(e => e.Minus);
-        if (totalMinusEntered != totalMinusExpected)
-        {
-            return OperationResult.Fail($"Сумма минусов должна быть равна {totalMinusExpected}.");
-        }
-
         var employeeIds = input.Employees.Select(e => e.EmployeeId).Distinct().ToList();
         var employees = await _db.Employees
             .Where(e => employeeIds.Contains(e.Id))
@@ -70,14 +61,33 @@ public class RaportOperationsService(
             return OperationResult.Fail("Сотрудники не найдены.");
         }
 
-        var minusValidation = await ValidateEmployeeMinusRulesAsync(input.Employees, employees, ct);
-        if (!minusValidation.Success)
-        {
-            return minusValidation;
-        }
+        int? finalSafe = null;
 
-        await TransactionHelper.ExecuteAsync(_db, async () =>
+        var result = await TransactionHelper.ExecuteAsync(_db, async () =>
         {
+            // Блокировки в общем порядке приложения (сейф → сотрудники по Id),
+            // и только под ними читаются балансы. Раньше currentSafe читался ДО
+            // транзакции: параллельная операция по сейфу в этом окне делала
+            // «Уравнивание расхождения» неверным — необратимая порча append-only
+            // журнала, а сумма минусов валидировалась против устаревшего значения.
+            await AdvisoryLocks.AcquireSafeAsync(_db, ct);
+            await AdvisoryLocks.AcquireEmployeeSalariesAsync(_db, employeeIds, ct);
+
+            var currentSafe = await _safeOperationsService.GetCurrentSafeAsync(ct);
+            var (cashDelta, cashNet, safeDelta, totalMinusExpected) = CalculateDeltas(input, currentSafe);
+
+            var totalMinusEntered = input.Employees.Sum(e => e.Minus);
+            if (totalMinusEntered != totalMinusExpected)
+            {
+                return OperationResult.Fail($"Сумма минусов должна быть равна {totalMinusExpected}.");
+            }
+
+            var minusValidation = await ValidateEmployeeMinusRulesAsync(input.Employees, employees, ct);
+            if (!minusValidation.Success)
+            {
+                return minusValidation;
+            }
+
             var raport = new RaportEntity
             {
                 FactCash = input.FactCash,
@@ -96,7 +106,11 @@ public class RaportOperationsService(
             var summaries = await CreateRaportEmployeesAsync(
                 input.Employees, employees, raport, scope, ct);
 
-            await ApplySafeOperationsAsync(cashNet, safeDelta, currentSafe, scope, ct);
+            if (cashNet != 0 || safeDelta != 0)
+            {
+                finalSafe = await ApplySafeOperationsAsync(cashNet, safeDelta, currentSafe, scope, ct);
+            }
+
             ApplyNonCash(input.FactNonCash);
             await SendPhotosIfNeededAsync(input.SendPhoto, input.PhotoSessionKey, scope, ct);
 
@@ -111,14 +125,23 @@ public class RaportOperationsService(
                 scope, ct);
 
             await _db.SaveChangesAsync(ct);
+            return OperationResult.Ok("Смена закрыта.");
         }, ct);
 
-        if (!string.IsNullOrWhiteSpace(input.PhotoSessionKey))
+        // Фото-сессию удаляем только при успехе: при отказе валидации кассир
+        // исправляет данные и повторяет отправку без повторного запроса фото.
+        if (result.Success && !string.IsNullOrWhiteSpace(input.PhotoSessionKey))
         {
             _photoSessionStore.RemoveSession(input.PhotoSessionKey);
         }
 
-        return OperationResult.Ok("Смена закрыта.");
+        // Публикация нового баланса подписчикам — строго после коммита.
+        if (result.Success && finalSafe.HasValue)
+        {
+            _safeOperationsService.PublishSafeUpdate(finalSafe.Value);
+        }
+
+        return result;
     }
 
     private static OperationResult ValidateBasics(RaportInput input)
@@ -146,6 +169,14 @@ public class RaportOperationsService(
         if (input.Employees.Any(e => e.Minus < 0))
         {
             return OperationResult.Fail("Минус не может быть отрицательным.");
+        }
+
+        // 0 часов — легально (сотрудник мог не выходить на смену, но, например,
+        // взять напиток), а вот отрицательные часы превращались в штраф
+        // ставка×часы и обходили суммарный лимит (−5 + 17 = 12).
+        if (input.Employees.Any(e => e.Hours < 0))
+        {
+            return OperationResult.Fail("Часы не могут быть отрицательными.");
         }
 
         return OperationResult.Ok();
@@ -232,7 +263,8 @@ public class RaportOperationsService(
         return summaries;
     }
 
-    private async Task ApplySafeOperationsAsync(
+    /// <returns>Итоговый баланс сейфа — вызывающий публикует его после коммита.</returns>
+    private async Task<int> ApplySafeOperationsAsync(
         int cashNet, int safeDelta, int currentSafe,
         TelegramMessageScope scope, CancellationToken ct)
     {
@@ -246,9 +278,11 @@ public class RaportOperationsService(
 
         if (safeDelta != 0)
         {
-            await _safeOperationsService.ApplySafeOperationAsync(
+            runningSafe = await _safeOperationsService.ApplySafeOperationAsync(
                 safeDelta, "Уравнивание расхождения", runningSafe, scope, ct);
         }
+
+        return runningSafe;
     }
 
     private void ApplyNonCash(int factNonCash)

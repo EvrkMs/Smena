@@ -38,6 +38,7 @@ public class ExpenseOperationsService(
         }
 
         bool extractFromSafe = fromSafe && !isNonCash;
+        int? updatedSafe = null;
 
         await TransactionHelper.ExecuteAsync(_db, async () =>
         {
@@ -56,7 +57,9 @@ public class ExpenseOperationsService(
 
             if (extractFromSafe)
             {
-                await _safeOperationsService.ApplySafeOperationAsync(
+                // Баланс сейфа меняется только под advisory-блокировкой (см. AdvisoryLocks).
+                await AdvisoryLocks.AcquireSafeAsync(_db, ct);
+                updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
                     -amount,
                     $"Расход: {comment}",
                     scope,
@@ -97,6 +100,13 @@ public class ExpenseOperationsService(
         if (!string.IsNullOrWhiteSpace(photoSessionKey))
         {
             _photoSessionStore.RemoveSession(photoSessionKey);
+        }
+
+        // Публикация подписчикам — строго после коммита: publish внутри транзакции
+        // при откате показывал клиентам списание, которого не было в БД.
+        if (updatedSafe.HasValue)
+        {
+            _safeOperationsService.PublishSafeUpdate(updatedSafe.Value);
         }
 
         return OperationResult.Ok("Расход добавлен.");

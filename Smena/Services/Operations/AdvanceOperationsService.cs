@@ -40,27 +40,38 @@ public class AdvanceOperationsService(
             return OperationResult.Fail("Employee not found.");
         }
 
-        var currentSalary = await _salaryOperationsService.GetCurrentSalaryAsync(employeeId, ct);
-
-        if (currentSalary <= 0)
-        {
-            return OperationResult.Fail("У сотрудника нет доступной ЗП для выплаты.");
-        }
-
-        if (amount > currentSalary)
-        {
-            return OperationResult.Fail($"Нельзя выдать больше текущей ЗП ({currentSalary} руб.).");
-        }
-
         var type = isSalary ? SalaryOperationType.Pay : SalaryOperationType.Advance;
         var resolvedComment = string.IsNullOrWhiteSpace(comment)
             ? (isSalary ? "ЗП" : "Аванс")
             : comment;
 
         bool fromSafe = extractFromSafe && !isNonCash;
+        int? updatedSafe = null;
 
-        await TransactionHelper.ExecuteAsync(_db, async () =>
+        var result = await TransactionHelper.ExecuteAsync(_db, async () =>
         {
+            // Общий порядок блокировок приложения: сейф → сотрудник.
+            if (fromSafe)
+            {
+                await AdvisoryLocks.AcquireSafeAsync(_db, ct);
+            }
+            await AdvisoryLocks.AcquireEmployeeSalaryAsync(_db, employeeId, ct);
+
+            // Проверка лимита — ВНУТРИ транзакции и под блокировкой: раньше два
+            // конкурентных вызова (ретрай сети, второй терминал) читали ЗП до
+            // транзакции, оба проходили проверку и выплачивали сумму дважды.
+            var currentSalary = await _salaryOperationsService.GetCurrentSalaryAsync(employeeId, ct);
+
+            if (currentSalary <= 0)
+            {
+                return OperationResult.Fail("У сотрудника нет доступной ЗП для выплаты.");
+            }
+
+            if (amount > currentSalary)
+            {
+                return OperationResult.Fail($"Нельзя выдать больше текущей ЗП ({currentSalary} руб.).");
+            }
+
             var signedDelta = SignedSalaryAmount(type, amount);
             await _salaryOperationsService.ApplySalaryOperationAsync(
                 employeeId,
@@ -72,7 +83,7 @@ public class AdvanceOperationsService(
 
             if (fromSafe)
             {
-                await _safeOperationsService.ApplySafeOperationAsync(
+                updatedSafe = await _safeOperationsService.ApplySafeOperationAsync(
                     -amount,
                     $"{employee.Name}: {resolvedComment}",
                     scope,
@@ -86,9 +97,15 @@ public class AdvanceOperationsService(
             }
 
             await _db.SaveChangesAsync(ct);
+            return OperationResult.Ok("Operation completed.");
         }, ct);
 
-        return OperationResult.Ok("Operation completed.");
+        if (result.Success && updatedSafe.HasValue)
+        {
+            _safeOperationsService.PublishSafeUpdate(updatedSafe.Value);
+        }
+
+        return result;
     }
 
     private static int SignedSalaryAmount(SalaryOperationType type, int amount)

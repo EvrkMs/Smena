@@ -62,10 +62,18 @@ public class SafeOperationsService(
             scope,
             ct);
 
-        _notifier.Publish(updatedSafe);
-
+        // ВАЖНО: publish в SubscribeSafe-стримы здесь НЕ делается. Этот метод
+        // выполняется внутри транзакции вызывающего; публикация до коммита
+        // рассылала клиентам баланс, который при откате (например, протухшая
+        // фото-сессия в расходе) никогда не попадал в БД — тикер показывал
+        // фантомные деньги. Telegram-сообщение выше компенсируется интерцептором
+        // при откате, у нотификатора компенсации нет — поэтому вызывающий обязан
+        // опубликовать итог сам ПОСЛЕ коммита через PublishSafeUpdate.
         return updatedSafe;
     }
+
+    /// <summary>Публикация нового баланса подписчикам — только ПОСЛЕ коммита.</summary>
+    public void PublishSafeUpdate(int updatedSafe) => _notifier.Publish(updatedSafe);
 
     public Channel<long> Subscribe() => _notifier.Subscribe();
 
@@ -81,10 +89,16 @@ public class SafeOperationsService(
         TelegramMessageScope scope,
         CancellationToken ct)
     {
-        await TransactionHelper.ExecuteAsync(_db, async () =>
+        var updatedSafe = await TransactionHelper.ExecuteAsync(_db, async () =>
         {
-            await ApplySafeOperationAsync(signedAmount, comment, scope, ct);
+            // Баланс читается под advisory-блокировкой внутри транзакции —
+            // иначе два конкурентных вызова считают его от одного значения.
+            await AdvisoryLocks.AcquireSafeAsync(_db, ct);
+            var updated = await ApplySafeOperationAsync(signedAmount, comment, scope, ct);
             await _db.SaveChangesAsync(ct);
+            return updated;
         }, ct);
+
+        PublishSafeUpdate(updatedSafe);
     }
 }

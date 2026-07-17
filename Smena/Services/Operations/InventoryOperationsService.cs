@@ -28,15 +28,20 @@ public class InventoryOperationsService(
             return OperationResult.Fail("No employees selected.");
         }
 
+        var ids = employeeIds.Distinct().ToList();
         var employees = await _db.Employees
-            .Where(e => employeeIds.Contains(e.Id))
+            .Where(e => ids.Contains(e.Id))
             .AsNoTracking()
             .OrderBy(e => e.Name)
             .ToListAsync(ct);
 
-        if (employees.Count == 0)
+        // Требуем ВСЕХ запрошенных: раньше проверялся только Count == 0, и при
+        // удалённом/неизвестном сотруднике вся сумма молча делилась между
+        // найденными (9000 на троих превращалось в 4500/4500 на двоих).
+        if (employees.Count != ids.Count)
         {
-            return OperationResult.Fail("Employees not found.");
+            return OperationResult.Fail(
+                "Часть сотрудников не найдена (возможно, кто-то удалён). Обновите список и повторите.");
         }
 
         int perEmployee = totalAmount / employees.Count;
@@ -47,6 +52,9 @@ public class InventoryOperationsService(
 
         await TransactionHelper.ExecuteAsync(_db, async () =>
         {
+            // Балансы ЗП меняются только под блокировками (порядок — по Id).
+            await AdvisoryLocks.AcquireEmployeeSalariesAsync(_db, ids, ct);
+
             foreach (var employee in employees)
             {
                 int amount = perEmployee + (remainder > 0 ? 1 : 0);
