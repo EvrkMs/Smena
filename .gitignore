@@ -219,6 +219,7 @@ rcf/
 **/appsettings.Staging.json
 .env
 .env.*
+*.env
 !.env.example
 
 # Windows Store app package directories and files
